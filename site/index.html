@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zeca. Suas reuniões, entendidas.</title>
+  <meta name="description" content="Zeca grava, transcreve e resume suas reuniões. Tudo processado no seu Mac.">
+  <link rel="icon" type="image/png" href="assets/icon.png">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --bg-alt: #f5f5f7;
+      --ink: #1d1d1f;
+      --muted: #6e6e73;
+      --radius: 24px;
+      --max: 980px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      -webkit-font-smoothing: antialiased;
+      line-height: 1.5;
+    }
+    a { color: inherit; text-decoration: none; }
+
+    nav {
+      position: sticky; top: 0; z-index: 10;
+      backdrop-filter: saturate(180%) blur(20px);
+      background: rgba(255,255,255,0.72);
+      border-bottom: 1px solid rgba(0,0,0,0.06);
+    }
+    .nav-inner {
+      max-width: var(--max); margin: 0 auto;
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 22px; font-size: 15px; font-weight: 600;
+    }
+    .nav-inner img { width: 26px; height: 26px; border-radius: 6px; }
+    .nav-inner .spacer { flex: 1; }
+    .nav-inner a.minor { font-weight: 400; color: var(--muted); margin-left: 18px; }
+
+    .hero { text-align: center; padding: 96px 22px 48px; }
+    .hero img.icon { width: 128px; height: 128px; border-radius: 28px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.14); }
+    .hero h1 {
+      font-size: clamp(48px, 8vw, 76px); font-weight: 700;
+      letter-spacing: -0.02em; line-height: 1.06; margin-top: 34px;
+    }
+    .hero p.sub {
+      font-size: clamp(19px, 2.6vw, 26px); color: var(--muted);
+      max-width: 640px; margin: 18px auto 0; font-weight: 400;
+    }
+    .cta { margin-top: 32px; display: flex; gap: 14px; justify-content: center; }
+    .btn {
+      display: inline-block; padding: 12px 26px; border-radius: 980px;
+      font-size: 17px; font-weight: 500;
+      background: var(--ink); color: #fff;
+      transition: opacity .15s ease;
+    }
+    .btn:hover { opacity: .82; }
+    .btn.ghost { background: transparent; color: var(--ink); border: 1px solid rgba(0,0,0,0.25); }
+    .hero .shot { margin: 64px auto 0; max-width: 1080px; padding: 0 10px; }
+
+    .shot img {
+      width: 100%; display: block; border-radius: var(--radius);
+      box-shadow: 0 24px 80px rgba(0,0,0,0.22);
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+
+    section.feature { padding: 110px 22px; }
+    section.feature.alt { background: var(--bg-alt); }
+    .feature-inner { max-width: var(--max); margin: 0 auto; text-align: center; }
+    .eyebrow {
+      font-size: 14px; font-weight: 600; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .feature h2 {
+      font-size: clamp(34px, 5vw, 56px); font-weight: 700;
+      letter-spacing: -0.02em; line-height: 1.08; margin-top: 10px;
+    }
+    .feature p.lead {
+      font-size: clamp(17px, 2.2vw, 21px); color: var(--muted);
+      max-width: 620px; margin: 16px auto 0;
+    }
+    .feature .shot { margin-top: 52px; }
+
+    .grid {
+      max-width: var(--max); margin: 0 auto; padding: 0 22px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+    }
+    .card {
+      background: var(--bg-alt); border-radius: 20px; padding: 30px 26px;
+      text-align: left;
+    }
+    section.feature.cards { padding-top: 0; }
+    .card .glyph { font-size: 26px; }
+    .card h3 { font-size: 19px; font-weight: 600; margin-top: 12px; }
+    .card p { font-size: 15px; color: var(--muted); margin-top: 6px; }
+
+    .privacy {
+      background: #000; color: #f5f5f7; text-align: center;
+      padding: 130px 22px;
+    }
+    .privacy img { width: 88px; opacity: .92; filter: invert(1); }
+    .privacy h2 {
+      font-size: clamp(36px, 5.5vw, 60px); font-weight: 700;
+      letter-spacing: -0.02em; margin-top: 26px;
+    }
+    .privacy p {
+      color: #a1a1a6; font-size: clamp(17px, 2.2vw, 21px);
+      max-width: 600px; margin: 16px auto 0;
+    }
+
+    footer {
+      padding: 44px 22px; text-align: center;
+      color: var(--muted); font-size: 13px;
+      border-top: 1px solid rgba(0,0,0,0.06);
+    }
+    footer .paw { width: 20px; opacity: .5; display: block; margin: 0 auto 10px; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <img src="assets/icon.png" alt="">
+    Zeca
+    <span class="spacer"></span>
+    <a class="minor" href="#transcricao">Transcrição</a>
+    <a class="minor" href="#resumo">Resumo</a>
+    <a class="minor" href="#dia">Seu dia</a>
+    <a class="minor" href="#privacidade">Privacidade</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <img class="icon" src="assets/icon.png" alt="Ícone do Zeca">
+  <h1>Suas reuniões,<br>entendidas.</h1>
+  <p class="sub">O Zeca grava, transcreve e resume cada reunião enquanto ela acontece. Tudo roda no seu Mac.</p>
+  <div class="cta">
+    <a class="btn" href="#">Baixar para Mac</a>
+    <a class="btn ghost" href="#transcricao">Conhecer</a>
+  </div>
+  <div class="shot"><img src="assets/detail.png" alt="Tela de detalhes de uma reunião no Zeca, com resumo e conversa transcrita por falante"></div>
+</header>
+
+<section class="feature" id="transcricao">
+  <div class="feature-inner">
+    <div class="eyebrow">Transcrição ao vivo</div>
+    <h2>Cada frase, no momento<br>em que é dita.</h2>
+    <p class="lead">Você fala, o texto aparece. A transcrição roda durante a gravação, frase a frase, com o seu lado da conversa separado do lado dos outros. Entende dezenas de idiomas e descobre sozinha qual está sendo falado.</p>
+    <div class="shot"><img src="assets/live.png" alt="Tela de gravação ao vivo com cronômetro, medidores de fala e transcrição em tempo real"></div>
+  </div>
+</section>
+
+<section class="feature alt" id="resumo">
+  <div class="feature-inner">
+    <div class="eyebrow">Inteligência</div>
+    <h2>Sai da reunião<br>com a ata pronta.</h2>
+    <p class="lead">Quando você para de gravar, o resumo já está pronto: o que foi discutido, o que ficou decidido e o que falta fazer. Durante a conversa, ele se atualiza a cada minuto. E cada fala tem dono, porque o Zeca reconhece quem está falando pela voz.</p>
+    <div class="shot"><img src="assets/detail.png" alt="Resumo automático da reunião com pontos principais e próximos passos"></div>
+  </div>
+</section>
+
+<section class="feature" id="dia">
+  <div class="feature-inner">
+    <div class="eyebrow">Seu dia</div>
+    <h2>A agenda e as reuniões,<br>num só lugar.</h2>
+    <p class="lead">O dashboard mostra os compromissos de hoje, com um clique para entrar na call já gravando. E conta quanto da sua semana foi parar em reunião.</p>
+    <div class="shot"><img src="assets/dashboard.png" alt="Dashboard com agenda do dia e gráfico de reuniões da semana"></div>
+  </div>
+</section>
+
+<section class="feature cards">
+  <div class="grid">
+    <div class="card">
+      <div class="glyph">🎙️</div>
+      <h3>Dois lados da conversa</h3>
+      <p>Grava o microfone e o áudio do sistema em trilhas separadas. Funciona com qualquer app de reunião.</p>
+    </div>
+    <div class="card">
+      <div class="glyph">👥</div>
+      <h3>Quem disse o quê</h3>
+      <p>Identifica os participantes por voz e separa as falas. Renomeie com dois cliques.</p>
+    </div>
+    <div class="card">
+      <div class="glyph">✍️</div>
+      <h3>Título automático</h3>
+      <p>Esqueceu de nomear? O Zeca batiza a reunião pelo assunto da conversa.</p>
+    </div>
+    <div class="card">
+      <div class="glyph">🌎</div>
+      <h3>Multilíngue de verdade</h3>
+      <p>Português, inglês, espanhol e dezenas de outros. Pode até misturar na mesma reunião.</p>
+    </div>
+    <div class="card">
+      <div class="glyph">⏸️</div>
+      <h3>Pausa quando precisar</h3>
+      <p>O que acontece na pausa fica fora da gravação, da transcrição e do resumo.</p>
+    </div>
+    <div class="card">
+      <div class="glyph">🐶</div>
+      <h3>Sempre à mão</h3>
+      <p>O tempo e o título da gravação ficam na barra de menus. Pausar ou parar não exige trocar de janela.</p>
+    </div>
+  </div>
+</section>
+
+<section class="privacy" id="privacidade">
+  <img src="assets/silhouette.png" alt="">
+  <h2>Nada sai do seu Mac.</h2>
+  <p>O áudio nunca deixa o seu computador. A transcrição e a identificação de falantes rodam no próprio Mac, no Neural Engine. A única coisa que vai pra nuvem é o resumo, feito com a sua chave da API. Sem chave, sem nuvem.</p>
+</section>
+
+<footer>
+  <img class="paw" src="assets/silhouette.png" alt="">
+  Zeca. Feito com carinho, e com um cachorro de verdade.
+</footer>
+
+</body>
+</html>
