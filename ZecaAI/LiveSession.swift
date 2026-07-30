@@ -75,15 +75,15 @@ final class LiveSession: ObservableObject {
         baseSample = [.me: 0, .others: 0]
         lastSummaryAt = Date()
         summarizedTurnCount = 0
-        status = "Preparando o modelo..."
+        status = "Preparing the model..."
 
         loop = Task { [weak self] in
             guard let self else { return }
             do {
-                self.manager = try await transcriber.loadManager(version: AsrModelInfo.liveParakeetVersion)
+                self.manager = try await transcriber.loadManager()
                 self.status = nil
             } catch {
-                self.status = "Transcricao ao vivo indisponivel: \(error.localizedDescription)"
+                self.status = "Live transcription unavailable: \(error.localizedDescription)"
             }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(100))
@@ -176,7 +176,7 @@ final class LiveSession: ObservableObject {
     }
 
     private func summarizeIfDue() async {
-        guard let summarizer, !summarizer.apiKey.isEmpty,
+        guard let summarizer, summarizer.isConfigured,
               Date().timeIntervalSince(lastSummaryAt) >= 60,
               turns.count > summarizedTurnCount
         else { return }

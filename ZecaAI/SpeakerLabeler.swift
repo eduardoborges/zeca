@@ -31,14 +31,14 @@ final class SpeakerLabeler: ObservableObject {
             var names: [String: String] = [:]
             for segment in segments.sorted(by: { $0.startTimeSeconds < $1.startTimeSeconds })
             where names[segment.speakerId] == nil {
-                names[segment.speakerId] = "Falante \(names.count + 1)"
+                names[segment.speakerId] = "Speaker \(names.count + 1)"
             }
             guard !names.isEmpty else {
-                error = "A diarização não encontrou fala na trilha dos outros participantes."
+                error = "Diarization found no speech on the other participants' track."
                 return nil
             }
             guard names.count > 1 else {
-                error = "A diarização encontrou apenas 1 falante — mantive \"Outros\"."
+                error = "Diarization found a single speaker, so \"Others\" was kept."
                 return nil
             }
 
