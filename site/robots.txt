@@ -1,0 +1,24 @@
+# Zeca — https://zeca.eduardoborges.dev
+User-agent: *
+Allow: /
+
+# AI crawlers: reading and answering with this content is fine
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+# Content Signals (https://contentsignals.org/)
+Content-Signal: search=yes, ai-input=yes, ai-train=no
+
+Sitemap: https://zeca.eduardoborges.dev/sitemap.xml

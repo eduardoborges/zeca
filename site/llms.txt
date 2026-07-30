@@ -1,0 +1,15 @@
+# Zeca
+
+Zeca is a macOS meeting recorder that transcribes and summarizes meetings
+entirely on the user's Mac.
+
+- Records microphone and system audio as separate tracks (works with any meeting app)
+- Live transcription (Parakeet TDT v3 on the Neural Engine), multilingual with automatic language detection
+- Speaker identification by voice (diarization)
+- Summaries: quick recap plus per-person next steps, and a detailed point-by-point account
+- Summary providers: Claude API (user's key) or fully on-device with Apple Intelligence
+- On-demand translation of transcript, summary and notes
+- Dashboard with today's calendar events (macOS Calendar and Google Calendar) and weekly stats
+- Privacy: audio never leaves the Mac; only the optional summary uses the cloud
+
+Requirements: macOS 15 or later. Site: https://zeca.eduardoborges.dev
