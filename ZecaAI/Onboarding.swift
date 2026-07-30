@@ -49,11 +49,11 @@ struct OnboardingView: View {
             Waveform()
             Text("Zeca AI")
                 .font(.system(size: 44, weight: .bold, design: .rounded))
-            Text("Suas reuniões gravadas, transcritas e resumidas.\nTudo processado no seu Mac.")
+            Text("Your meetings recorded, transcribed and summarized.\nAll on your Mac.")
                 .font(.title3)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button("Começar") { step = 1 }
+            Button("Get started") { step = 1 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .padding(.top, 8)
@@ -68,9 +68,9 @@ struct OnboardingView: View {
                 .font(.system(size: 52))
                 .foregroundStyle(LinearGradient.zeca)
                 .symbolEffect(.pulse)
-            Text("Resumos com o Claude")
+            Text("Summaries with Claude")
                 .font(.system(size: 30, weight: .bold, design: .rounded))
-            Text("Cole sua chave da API da Anthropic para gerar resumos das reuniões — ao vivo, a cada minuto. A chave fica salva só no seu Mac.")
+            Text("Paste your Anthropic API key to generate meeting summaries, live, every minute. The key is stored only on your Mac.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             SecureField("sk-ant-...", text: keyBinding)
@@ -78,14 +78,14 @@ struct OnboardingView: View {
                 .controlSize(.large)
                 .frame(maxWidth: 340)
             HStack(spacing: 12) {
-                Button("Agora não") { step = 2 }
-                Button("Continuar") { step = 2 }
+                Button("Not now") { step = 2 }
+                Button("Continue") { step = 2 }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .disabled(summarizer.apiKey.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding(.top, 8)
-            Link("Criar uma chave em console.anthropic.com",
+            Link("Create a key at console.anthropic.com",
                  destination: URL(string: "https://console.anthropic.com/settings/keys")!)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -104,11 +104,11 @@ struct OnboardingView: View {
                 .font(.system(size: 52))
                 .foregroundStyle(modelReady ? .green : Color.primary)
                 .contentTransition(.symbolEffect(.replace))
-            Text(modelReady ? "Tudo pronto!" : "Modelo de transcrição")
+            Text(modelReady ? "All set!" : "Transcription model")
                 .font(.system(size: 30, weight: .bold, design: .rounded))
             Text(modelReady
-                 ? "O Zeca AI está pronto para a sua primeira reunião."
-                 : "O Parakeet TDT v3 roda 100% no seu Mac, no Neural Engine.\nNada de áudio sai do computador. Download único de ~600 MB.")
+                 ? "Zeca AI is ready for your first meeting."
+                 : "Parakeet TDT v3 runs entirely on your Mac, on the Neural Engine.\nNo audio ever leaves the computer. One-time ~600 MB download.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
@@ -120,7 +120,7 @@ struct OnboardingView: View {
                     } else {
                         ProgressView()
                     }
-                    Text(transcriber.status ?? "Preparando...")
+                    Text(transcriber.status ?? "Preparing...")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .contentTransition(.opacity)
@@ -130,13 +130,13 @@ struct OnboardingView: View {
             }
 
             if modelReady {
-                Button("Abrir o Zeca AI") { withAnimation(.easeOut(duration: 0.4)) { onboarded = true } }
+                Button("Open Zeca AI") { withAnimation(.easeOut(duration: 0.4)) { onboarded = true } }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
             } else if !downloading {
                 HStack(spacing: 12) {
-                    Button("Baixar depois") { onboarded = true }
-                    Button("Baixar modelo") { download() }
+                    Button("Download later") { onboarded = true }
+                    Button("Download model") { download() }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
                 }

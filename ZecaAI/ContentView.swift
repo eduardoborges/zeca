@@ -1,11 +1,16 @@
 import AVFoundation
 import SwiftUI
 
+enum SidebarItem: Hashable {
+    case overview
+    case recording(Recording)
+}
+
 struct ContentView: View {
     @EnvironmentObject private var recorder: Recorder
     @EnvironmentObject private var transcriber: Transcriber
     @EnvironmentObject private var summarizer: Summarizer
-    @State private var selection: Recording?
+    @State private var selection: SidebarItem? = .overview
     @State private var showingNew = false
     @State private var draftTitle = ""
     @State private var pendingDelete: Recording?
@@ -24,83 +29,104 @@ struct ContentView: View {
         .animation(.easeOut(duration: 0.4), value: onboarded)
     }
 
+    /// Grupos da sidebar: hoje, ontem, ultimos 7/30 dias, mais antigas.
+    private var groupedRecordings: [(title: String, items: [Recording])] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let weekAgo = calendar.date(byAdding: .day, value: -7, to: today)!
+        let monthAgo = calendar.date(byAdding: .day, value: -30, to: today)!
+        var groups: [(title: String, items: [Recording])] = [
+            ("Today", []), ("Yesterday", []), ("Last week", []), ("Last month", []), ("Older", []),
+        ]
+        for recording in recorder.recordings {
+            guard let date = recording.date else { groups[4].items.append(recording); continue }
+            if calendar.isDateInToday(date) { groups[0].items.append(recording) }
+            else if calendar.isDateInYesterday(date) { groups[1].items.append(recording) }
+            else if date >= weekAgo { groups[2].items.append(recording) }
+            else if date >= monthAgo { groups[3].items.append(recording) }
+            else { groups[4].items.append(recording) }
+        }
+        return groups.filter { !$0.items.isEmpty }
+    }
+
     private var main: some View {
         NavigationSplitView {
-            List(recorder.recordings, selection: $selection) { recording in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(recording.title).lineLimit(1)
-                    if let date = recording.date {
-                        Text(date.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.vertical, 2)
-                .tag(recording)
-                .contextMenu {
-                    Button("Excluir", systemImage: "trash", role: .destructive) {
-                        pendingDelete = recording
+            List(selection: $selection) {
+                Label("Overview", systemImage: "square.grid.2x2")
+                    .tag(SidebarItem.overview)
+                ForEach(groupedRecordings, id: \.title) { group in
+                    Section(group.title) {
+                        ForEach(group.items) { recording in
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(recording.title).lineLimit(1)
+                                if let date = recording.date {
+                                    Text(date.formatted(.dateTime.day().month(.abbreviated).hour().minute()))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                            .tag(SidebarItem.recording(recording))
+                            .contextMenu {
+                                Button("Delete", systemImage: "trash", role: .destructive) {
+                                    pendingDelete = recording
+                                }
+                            }
+                        }
                     }
                 }
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 230)
-            .overlay {
-                if recorder.recordings.isEmpty {
-                    ContentUnavailableView("Nenhuma reuniao", systemImage: "waveform",
-                                           description: Text("Crie uma nova reuniao para comecar."))
-                }
-            }
         } detail: {
             if showingNew || recorder.isRecording {
                 NewMeetingView(isPresented: $showingNew, initialTitle: draftTitle)
-            } else if let selection {
-                RecordingDetail(recording: selection) { pendingDelete = selection }
+            } else if case .recording(let recording) = selection {
+                RecordingDetail(recording: recording) { pendingDelete = recording }
             } else {
                 DashboardView { title, link in
                     if let link { NSWorkspace.shared.open(link) }
                     draftTitle = title
-                    selection = nil
+                    selection = .overview
                     showingNew = true
                     Task { await recorder.start(title: title, transcriber: transcriber, summarizer: summarizer) }
                 }
             }
         }
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Início", systemImage: "house") {
-                    selection = nil
-                    showingNew = false
-                }
-                .disabled(recorder.isRecording || (selection == nil && !showingNew))
-            }
             ToolbarItem(placement: .primaryAction) {
-                Button("Nova reunião", systemImage: "plus.circle.fill") {
-                    selection = nil
+                Button {
+                    selection = .overview
                     draftTitle = ""
                     showingNew = true
+                } label: {
+                    Label("New meeting", systemImage: "record.circle.fill")
+                        .labelStyle(.titleAndIcon)
+                        .fontWeight(.semibold)
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
                 .disabled(showingNew || recorder.isRecording)
             }
         }
-        .alert("Erro", isPresented: .constant(recorder.error != nil)) {
+        .alert("Error", isPresented: .constant(recorder.error != nil)) {
             Button("OK") { recorder.error = nil }
         } message: {
             Text(recorder.error ?? "")
         }
         .confirmationDialog(
-            "Excluir \"\(pendingDelete?.title ?? "")\"?",
+            "Delete \"\(pendingDelete?.title ?? "")\"?",
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
             titleVisibility: .visible
         ) {
-            Button("Excluir reunião", role: .destructive) {
+            Button("Delete meeting", role: .destructive) {
                 guard let recording = pendingDelete else { return }
-                if selection == recording { selection = nil }
+                if selection == .recording(recording) { selection = .overview }
                 recorder.delete(recording)
                 pendingDelete = nil
             }
-            Button("Cancelar", role: .cancel) { pendingDelete = nil }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
         } message: {
-            Text("Áudio, transcrição e resumo serão apagados. Sem volta.")
+            Text("Audio, transcript and summary will be deleted. No undo.")
         }
     }
 }
@@ -116,7 +142,7 @@ private struct NewMeetingView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            TextField("Título da reunião (opcional)", text: $title)
+            TextField("Meeting title (optional)", text: $title)
                 .textFieldStyle(.plain)
                 .font(.title2.weight(.semibold))
                 .disabled(recorder.isRecording)
@@ -126,18 +152,18 @@ private struct NewMeetingView: View {
 
             HStack(spacing: 12) {
                 if !recorder.isRecording {
-                    Button("Iniciar", systemImage: "record.circle.fill") {
+                    Button("Start", systemImage: "record.circle.fill") {
                         Task { await recorder.start(title: title, transcriber: transcriber, summarizer: summarizer) }
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
-                    Button("Cancelar") { isPresented = false }
+                    Button("Cancel") { isPresented = false }
                 } else {
-                    Button(recorder.isPaused ? "Retomar" : "Pausar",
+                    Button(recorder.isPaused ? "Resume" : "Pause",
                            systemImage: recorder.isPaused ? "play.fill" : "pause.fill") {
                         recorder.togglePause()
                     }
-                    Button("Parar", systemImage: "stop.fill") {
+                    Button("Stop", systemImage: "stop.fill") {
                         Task {
                             await recorder.stop()
                             isPresented = false
@@ -174,12 +200,12 @@ private struct LiveRecordingView: View {
                         .foregroundStyle(recorder.isPaused ? .secondary : .primary)
                 }
                 if recorder.isPaused {
-                    Text("Pausado").foregroundStyle(.secondary)
+                    Text("Paused").foregroundStyle(.secondary)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 6) {
-                    LevelBar(label: "Você", level: live.micLevel, tint: .primary)
-                    LevelBar(label: "Outros", level: live.systemLevel, tint: .secondary)
+                    LevelBar(label: "You", level: live.micLevel, tint: .primary)
+                    LevelBar(label: "Others", level: live.systemLevel, tint: .secondary)
                 }
             }
             .padding(.horizontal)
@@ -197,7 +223,7 @@ private struct LiveRecordingView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 10) {
                             if live.turns.isEmpty {
-                                Text("A transcrição aparece aqui em blocos de ~5s...")
+                                Text("The transcript shows up here, sentence by sentence...")
                                     .foregroundStyle(.secondary)
                             }
                             ForEach(Array(live.turns.enumerated()), id: \.offset) { TurnRow(turn: $1) }
@@ -214,20 +240,21 @@ private struct LiveRecordingView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 8) {
-                        Label("Resumo ao vivo", systemImage: "sparkles")
+                        Label("Live summary", systemImage: "sparkles")
                             .font(.headline)
                         if let summary = live.summary {
                             Text(LocalizedStringKey(summary)).textSelection(.enabled)
                         } else {
-                            Text("Atualizado a cada minuto de conversa.")
+                            Text("Updated after every minute of conversation.")
                                 .foregroundStyle(.secondary)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding()
+                    .zecaGlass(in: RoundedRectangle(cornerRadius: 18))
+                    .padding(10)
                 }
                 .frame(minWidth: 220)
-                .background(.quaternary.opacity(0.3))
             }
         }
     }
@@ -263,6 +290,11 @@ private struct RecordingDetail: View {
     @EnvironmentObject private var recorder: Recorder
     @State private var turns: [Turn] = []
     @State private var summary: String?
+    @State private var notes: String?
+    @State private var generatingNotes = false
+    @State private var translatedTurns: [Turn]?
+    @State private var translationCode: String?
+    @State private var translating = false
     @State private var editingTitle = false
     @State private var titleDraft = ""
     @State private var renamingSpeaker: String?
@@ -273,6 +305,7 @@ private struct RecordingDetail: View {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 summaryCard
+                notesCard
                 transcriptCard
             }
             .frame(maxWidth: 760)
@@ -282,26 +315,29 @@ private struct RecordingDetail: View {
         .task(id: recording.id) {
             turns = recording.transcript ?? []
             summary = recording.summary
+            notes = recording.notes
+            translatedTurns = nil
+            translationCode = nil
             summarizer.error = nil
             labeler.error = nil
             editingTitle = false
             await autoProcess()
         }
-        .alert("Renomear falante", isPresented: Binding(
+        .alert("Rename speaker", isPresented: Binding(
             get: { renamingSpeaker != nil },
             set: { if !$0 { renamingSpeaker = nil } }
         )) {
-            TextField("Nome", text: $speakerName)
-            Button("Salvar") { renameSpeaker() }
-            Button("Cancelar", role: .cancel) { renamingSpeaker = nil }
+            TextField("Name", text: $speakerName)
+            Button("Save") { renameSpeaker() }
+            Button("Cancel", role: .cancel) { renamingSpeaker = nil }
         } message: {
-            Text("Novo nome para \"\(renamingSpeaker ?? "")\" em toda a conversa.")
+            Text("New name for \"\(renamingSpeaker ?? "")\" across the whole conversation.")
         }
         .toolbar {
-            Button("Mostrar no Finder", systemImage: "folder") {
+            Button("Show in Finder", systemImage: "folder") {
                 NSWorkspace.shared.activateFileViewerSelecting([recording.url])
             }
-            Button("Excluir", systemImage: "trash", role: .destructive) { onDelete() }
+            Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
         }
     }
 
@@ -371,7 +407,7 @@ private struct RecordingDetail: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             if editingTitle {
-                TextField("Título da reunião", text: $titleDraft)
+                TextField("Meeting title", text: $titleDraft)
                     .textFieldStyle(.plain)
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .onSubmit { saveTitle() }
@@ -383,7 +419,7 @@ private struct RecordingDetail: View {
                         titleDraft = recording.customTitle ?? ""
                         editingTitle = true
                     }
-                    .help("Clique duas vezes para renomear")
+                    .help("Double-click to rename")
             }
             HStack(spacing: 14) {
                 if let date = recording.date {
@@ -394,14 +430,32 @@ private struct RecordingDetail: View {
                     Label(Duration.seconds(durationSeconds).formatted(.time(pattern: .minuteSecond)),
                           systemImage: "clock")
                 }
-                AudioChip(url: recording.mic, label: "Você")
-                AudioChip(url: recording.system, label: "Outros")
+                AudioChip(url: recording.mic, label: "You")
+                AudioChip(url: recording.system, label: "Others")
                 Spacer()
-                Button("Refazer análise", systemImage: "wand.and.stars") { redoEverything() }
-                    .buttonStyle(.bordered)
-                    .clipShape(Capsule())
-                    .disabled(transcriber.status != nil || labeler.isRunning || summarizer.isRunning)
-                    .help("Refaz a transcrição com o modelo das Configurações, os falantes e o resumo")
+                if isBusy {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text(busyLabel).font(.callout).foregroundStyle(.secondary)
+                    }
+                } else {
+                    Menu {
+                        Button("Redo full analysis", systemImage: "wand.and.stars") { redoEverything() }
+                        Divider()
+                        Button("Redo transcript only", systemImage: "text.bubble") { redoTranscription() }
+                        Button("Redo summary only", systemImage: "sparkles") { summarize() }
+                            .disabled(turns.isEmpty)
+                        Button("Redo point by point only", systemImage: "list.bullet") { generateNotes() }
+                            .disabled(turns.isEmpty)
+                    } label: {
+                        Label("Redo analysis", systemImage: "wand.and.stars")
+                    } primaryAction: {
+                        redoEverything()
+                    }
+                    .zecaGlassButton()
+                    .fixedSize()
+                    .help("Transcript, speakers and summary, using the model from Settings")
+                }
             }
             .font(.callout)
             .foregroundStyle(.secondary)
@@ -415,7 +469,7 @@ private struct RecordingDetail: View {
                             .background(SpeakerStyle.color(for: name).opacity(0.15), in: Capsule())
                             .foregroundStyle(SpeakerStyle.color(for: name))
                             .onTapGesture(count: 2) { startRenaming(name) }
-                            .help("Clique duas vezes para renomear")
+                            .help("Double-click to rename")
                     }
                 }
             }
@@ -424,35 +478,32 @@ private struct RecordingDetail: View {
 
     // MARK: - Cards
 
+    @ViewBuilder
     private var summaryCard: some View {
-        Card(title: "Resumo", systemImage: "sparkles", tint: .primary) {
-            if summarizer.isRunning {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Resumindo com o Claude...").foregroundStyle(.secondary)
+        if let summary, !summarizer.isRunning {
+            GeneratedTextCard(title: "Summary", systemImage: "sparkles",
+                              text: summary, folder: recording.url, kind: "summary")
+                .id(summary)
+        } else {
+            Card(title: "Summary", systemImage: "sparkles", tint: .primary) {
+                if summarizer.isRunning {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Summarizing with \(summarizer.providerName)...").foregroundStyle(.secondary)
+                    }
+                } else {
+                    HStack {
+                        Text(turns.isEmpty ? "Available after transcription." : "Generate a summary with \(summarizer.providerName).")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Summarize", systemImage: "sparkles") { summarize() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(turns.isEmpty)
+                    }
                 }
-            } else if let summary {
-                Text(LocalizedStringKey(summary))
-                    .textSelection(.enabled)
-                    .lineSpacing(3)
-                HStack {
-                    Spacer()
-                    Button("Refazer resumo", systemImage: "arrow.clockwise") { summarize() }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(.secondary)
+                if let error = summarizer.error {
+                    Text(error).font(.caption).foregroundStyle(.red)
                 }
-            } else {
-                HStack {
-                    Text(turns.isEmpty ? "Disponível após a transcrição." : "Gere um resumo desta reunião com o Claude.")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Resumir", systemImage: "sparkles") { summarize() }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(turns.isEmpty)
-                }
-            }
-            if let error = summarizer.error {
-                Text(error).font(.caption).foregroundStyle(.red)
             }
         }
     }
@@ -465,21 +516,90 @@ private struct RecordingDetail: View {
         }
     }
 
-    /// Refaz a transcricao (modelo das Configuracoes) e por cima gera o resumo novo.
+    private var isBusy: Bool {
+        transcriber.status != nil || labeler.isRunning || summarizer.isRunning
+    }
+
+    private var busyLabel: String {
+        transcriber.status ?? (labeler.isRunning
+            ? "Identifying speakers..."
+            : "Summarizing with \(summarizer.providerName)...")
+    }
+
+    /// Refaz a transcricao (modelo das Configuracoes) e por cima o resumo e o ponto a ponto.
     private func redoEverything() {
         summarizer.error = nil
         Task {
             turns = []
             summary = nil
+            notes = nil
             try? FileManager.default.removeItem(at: recording.transcriptURL)
             await autoProcess()
             guard !turns.isEmpty else { return }
             summary = await summarizer.run(recording, turns: turns)
+            generatingNotes = true
+            notes = await summarizer.runNotes(recording, turns: turns)
+            generatingNotes = false
+        }
+    }
+
+    private func generateNotes() {
+        summarizer.error = nil
+        Task {
+            generatingNotes = true
+            notes = await summarizer.runNotes(recording, turns: turns)
+            generatingNotes = false
+        }
+    }
+
+    @ViewBuilder
+    private var notesCard: some View {
+        if let notes, !generatingNotes {
+            GeneratedTextCard(title: "Point by point", systemImage: "list.bullet.rectangle",
+                              text: notes, folder: recording.url, kind: "notes")
+                .id(notes)
+        } else {
+            Card(title: "Point by point", systemImage: "list.bullet.rectangle", tint: .primary) {
+                if generatingNotes {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Writing notes with \(summarizer.providerName)...").foregroundStyle(.secondary)
+                    }
+                } else {
+                    HStack {
+                        Text(turns.isEmpty ? "Available after transcription."
+                                           : "A detailed, paragraph-by-paragraph account of the whole conversation.")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Generate", systemImage: "list.bullet") { generateNotes() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(turns.isEmpty || generatingNotes)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Traduz (ou carrega o cache) e mostra no lugar do original.
+    private func translate(to code: String) {
+        summarizer.error = nil
+        Task {
+            translating = true
+            let cache = recording.url.appendingPathComponent("translation-\(code).json")
+            if let data = try? Data(contentsOf: cache),
+               let cached = try? JSONDecoder().decode([Turn].self, from: data) {
+                translatedTurns = cached
+            } else if let translated = await summarizer.translate(turns, to: code) {
+                translatedTurns = translated
+                if let data = try? JSONEncoder().encode(translated) { try? data.write(to: cache) }
+            }
+            translationCode = translatedTurns == nil ? nil : code
+            translating = false
         }
     }
 
     private var transcriptCard: some View {
-        Card(title: "Conversa", systemImage: "text.bubble", tint: .primary) {
+        Card(title: "Conversation", systemImage: "text.bubble", tint: .primary) {
             if let status = transcriber.status {
                 VStack(alignment: .leading, spacing: 6) {
                     if let progress = transcriber.progress {
@@ -490,65 +610,156 @@ private struct RecordingDetail: View {
                     Text(status).font(.caption).foregroundStyle(.secondary)
                 }
             } else if turns.isEmpty {
-                Text("Nenhuma fala detectada nesta gravação.")
+                Text("No speech detected in this recording.")
                     .foregroundStyle(.secondary)
             } else {
                 if labeler.isRunning {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
-                        Text("Identificando falantes...").font(.caption).foregroundStyle(.secondary)
+                        Text("Identifying speakers...").font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 if let error = labeler.error {
                     Text(error).font(.caption).foregroundStyle(.secondary)
                 }
+                if let code = translationCode,
+                   let name = Summarizer.languages.first(where: { $0.code == code })?.label {
+                    HStack(spacing: 8) {
+                        Text("Translated to \(name)").font(.caption).foregroundStyle(.secondary)
+                        Button("Show original") {
+                            translatedTurns = nil
+                            translationCode = nil
+                        }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                    }
+                }
                 VStack(alignment: .leading, spacing: 14) {
                     // Indice: dois turnos podem ter o mesmo start e colidir no id.
-                    ForEach(Array(turns.enumerated()), id: \.offset) {
+                    ForEach(Array((translatedTurns ?? turns).enumerated()), id: \.offset) {
                         TurnRow(turn: $1, onRename: startRenaming)
                     }
                 }
-                if !labeler.isRunning {
-                    HStack {
-                        Spacer()
-                        Button("Refazer transcrição", systemImage: "arrow.clockwise") { redoTranscription() }
-                            .buttonStyle(.borderless)
-                            .foregroundStyle(.secondary)
-                            .help("Transcreve de novo com o modelo escolhido nas Configurações")
-                    }
-                }
+            }
+        } accessory: {
+            if !turns.isEmpty, transcriber.status == nil {
+                TranslateMenu(busy: translating) { translate(to: $0) }
             }
         }
     }
 }
 
+/// Card de texto gerado (resumo/ponto a ponto) com traducao no canto e cache por idioma.
+private struct GeneratedTextCard: View {
+    let title: String
+    let systemImage: String
+    let text: String
+    let folder: URL
+    let kind: String
+    @EnvironmentObject private var summarizer: Summarizer
+    @State private var translated: String?
+    @State private var code: String?
+    @State private var busy = false
+
+    var body: some View {
+        Card(title: title, systemImage: systemImage, tint: .primary) {
+            if let code,
+               let name = Summarizer.languages.first(where: { $0.code == code })?.label {
+                HStack(spacing: 8) {
+                    Text("Translated to \(name)").font(.caption).foregroundStyle(.secondary)
+                    Button("Show original") {
+                        translated = nil
+                        self.code = nil
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                }
+            }
+            Text(LocalizedStringKey(translated ?? text))
+                .textSelection(.enabled)
+                .lineSpacing(3)
+        } accessory: {
+            TranslateMenu(busy: busy) { translate(to: $0) }
+        }
+    }
+
+    private func translate(to newCode: String) {
+        Task {
+            busy = true
+            let cache = folder.appendingPathComponent("\(kind)-\(newCode).md")
+            if let cached = try? String(contentsOf: cache, encoding: .utf8) {
+                translated = cached
+            } else if let result = await summarizer.translateText(text, to: newCode) {
+                translated = result
+                try? result.write(to: cache, atomically: true, encoding: .utf8)
+            }
+            code = translated == nil ? nil : newCode
+            busy = false
+        }
+    }
+}
+
 /// Card com material, borda e titulo — o bloco visual padrao do detalhe.
-private struct Card<Content: View>: View {
+/// `accessory` fica no canto direito do cabecalho (ex.: menu de traducao).
+private struct Card<Content: View, Accessory: View>: View {
     let title: String
     let systemImage: String
     let tint: Color
     @ViewBuilder var content: Content
+    @ViewBuilder var accessory: Accessory
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: systemImage)
-                .font(.headline)
-                .foregroundStyle(tint)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center) {
+                Label(title, systemImage: systemImage)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(tint)
+                Spacer()
+                accessory
+            }
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.quaternary, lineWidth: 1))
+        .zecaGlass(in: RoundedRectangle(cornerRadius: 18))
     }
 }
 
-    /// Tons monocromaticos estaveis por falante: "Voce" forte, demais em cinzas.
+extension Card where Accessory == EmptyView {
+    init(title: String, systemImage: String, tint: Color, @ViewBuilder content: () -> Content) {
+        self.init(title: title, systemImage: systemImage, tint: tint,
+                  content: content, accessory: { EmptyView() })
+    }
+}
+
+/// Menu de traducao (select de idiomas) usado no canto dos cards.
+private struct TranslateMenu: View {
+    let busy: Bool
+    let action: (String) -> Void
+
+    var body: some View {
+        if busy {
+            ProgressView().controlSize(.small)
+        } else {
+            Menu {
+                ForEach(Summarizer.languages.filter { $0.code != "auto" }, id: \.code) { item in
+                    Button(item.label) { action(item.code) }
+                }
+            } label: {
+                Label("Translate", systemImage: "globe")
+            }
+            .fixedSize()
+        }
+    }
+}
+
+    /// Tons monocromaticos estaveis por falante: "You" forte, demais em cinzas.
+    /// Aceita os rotulos antigos em portugues gravados em transcript.json.
 enum SpeakerStyle {
     static func color(for label: String) -> Color {
         switch label {
-        case "Voce", "Você": return .primary
-        case "Outros": return .secondary
+        case "You", "Voce", "Você": return .primary
+        case "Others", "Outros": return .secondary
         default:
             // Distingue falantes por tom de cinza, nao por matiz.
             let shades: [Color] = [Color.primary.opacity(0.8), .secondary,
@@ -560,7 +771,8 @@ enum SpeakerStyle {
     }
 
     static func initials(for label: String) -> String {
-        if label.hasPrefix("Falante"), let n = label.split(separator: " ").last { return "F\(n)" }
+        if label.hasPrefix("Speaker") || label.hasPrefix("Falante"),
+           let n = label.split(separator: " ").last { return "S\(n)" }
         return String(label.prefix(1))
     }
 }
@@ -610,7 +822,7 @@ private struct AudioChip: View {
         } label: {
             Label(label, systemImage: player == nil ? "play.fill" : "pause.fill")
         }
-        .buttonStyle(.bordered)
+        .zecaGlassButton()
         .clipShape(Capsule())
         .disabled(!exists)
         .onDisappear { player = nil }
