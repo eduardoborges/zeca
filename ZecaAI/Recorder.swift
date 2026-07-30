@@ -18,6 +18,8 @@ struct Recording: Identifiable, Hashable {
     var offsetsURL: URL { url.appendingPathComponent("offsets.json") }
     var transcriptURL: URL { url.appendingPathComponent("transcript.json") }
     var summaryURL: URL { url.appendingPathComponent("summary.md") }
+    var notesURL: URL { url.appendingPathComponent("notes.md") }
+    var notes: String? { try? String(contentsOf: notesURL, encoding: .utf8) }
 
     var summary: String? { try? String(contentsOf: summaryURL, encoding: .utf8) }
 
@@ -145,7 +147,7 @@ final class Recorder: ObservableObject {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
             guard let display = content.displays.first else {
                 throw NSError(domain: "ZecaAI", code: 1,
-                              userInfo: [NSLocalizedDescriptionKey: "Nenhum display encontrado."])
+                              userInfo: [NSLocalizedDescriptionKey: "No display found."])
             }
 
             let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
