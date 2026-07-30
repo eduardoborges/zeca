@@ -14,3 +14,27 @@ extension LinearGradient {
     static let zeca = LinearGradient(colors: [.primary, .primary.opacity(0.6)],
                                      startPoint: .topLeading, endPoint: .bottomTrailing)
 }
+
+extension View {
+    /// Liquid Glass no macOS 26+; material com borda (visual anterior) no macOS 15.
+    @ViewBuilder
+    func zecaGlass<S: InsettableShape>(in shape: S) -> some View {
+        if #available(macOS 26.0, *) {
+            self.glassEffect(.regular, in: shape)
+        } else {
+            self
+                .background(.regularMaterial, in: shape)
+                .overlay(shape.strokeBorder(.quaternary, lineWidth: 1))
+        }
+    }
+
+    /// Botao de vidro no macOS 26+; bordered no macOS 15.
+    @ViewBuilder
+    func zecaGlassButton() -> some View {
+        if #available(macOS 26.0, *) {
+            self.buttonStyle(.glass)
+        } else {
+            self.buttonStyle(.bordered)
+        }
+    }
+}
