@@ -8,7 +8,7 @@ struct ZecaAIApp: App {
     @StateObject private var speakerLabeler = SpeakerLabeler()
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             ContentView()
                 .environmentObject(recorder)
                 .environmentObject(transcriber)
@@ -58,21 +58,22 @@ private struct StatusBarLabel: View {
 
 private struct StatusMenu: View {
     @EnvironmentObject private var recorder: Recorder
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         if recorder.isRecording {
-            Text(recorder.currentTitle ?? "Gravando reunião")
-            Text(recorder.isPaused ? "Pausado" : "Gravando...")
+            Text(recorder.currentTitle ?? "Recording meeting")
+            Text(recorder.isPaused ? "Paused" : "Recording...")
             Divider()
-            Button(recorder.isPaused ? "Retomar" : "Pausar") { recorder.togglePause() }
-            Button("Parar gravação") { Task { await recorder.stop() } }
+            Button(recorder.isPaused ? "Resume" : "Pause") { recorder.togglePause() }
+            Button("Stop recording") { Task { await recorder.stop() } }
         } else {
-            Text("Nenhuma gravação em andamento")
+            Text("No recording in progress")
         }
         Divider()
-        Button("Abrir o Zeca AI") {
+        Button("Open Zeca AI") {
+            openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
-            NSApp.windows.first { $0.title.contains("Zeca") || $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
         }
     }
 }
