@@ -1,11 +1,18 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zeca. Suas reuniões, entendidas.</title>
-  <meta name="description" content="Zeca grava, transcreve e resume suas reuniões. Tudo processado no seu Mac.">
-  <link rel="icon" type="image/png" href="assets/icon.png">
+  <title>Zeca. Your meetings, understood.</title>
+  <meta name="description" content="Zeca records, transcribes and summarizes your meetings. All on your Mac.">
+  <link rel="icon" href="assets/favicon.ico">
+  <link rel="icon" type="image/svg+xml" href="assets/zeca.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+  <meta property="og:title" content="Zeca. Your meetings, understood.">
+  <meta property="og:description" content="Zeca records, transcribes and summarizes every meeting as it happens. Everything runs on your Mac.">
+  <meta property="og:image" content="assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
   <style>
     :root {
       --bg: #ffffff;
@@ -26,24 +33,35 @@
     }
     a { color: inherit; text-decoration: none; }
 
+    /* nav global no padrao apple.com: 44px, escura, translucida, links 12px */
     nav {
-      position: sticky; top: 0; z-index: 10;
+      position: sticky; top: 0; z-index: 10; height: 44px;
       backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
       background: rgba(255,255,255,0.72);
       border-bottom: 1px solid rgba(0,0,0,0.06);
     }
     .nav-inner {
-      max-width: var(--max); margin: 0 auto;
-      display: flex; align-items: center; gap: 10px;
-      padding: 12px 22px; font-size: 15px; font-weight: 600;
+      max-width: 980px; height: 44px; margin: 0 auto; padding: 0 22px;
+      display: flex; align-items: center; gap: 28px;
     }
-    .nav-inner img { width: 26px; height: 26px; border-radius: 6px; }
-    .nav-inner .spacer { flex: 1; }
-    .nav-inner a.minor { font-weight: 400; color: var(--muted); margin-left: 18px; }
+    .nav-inner a:first-child { margin-right: auto; }
+    .nav-inner a {
+      font-size: 12px; font-weight: 400; letter-spacing: -0.01em;
+      color: rgba(29,29,31,0.72); transition: color .2s ease;
+      display: inline-flex; align-items: center;
+    }
+    .nav-inner a:hover { color: var(--ink); }
+    .nav-inner img { width: 22px; height: 22px; display: block; }
+
+    .nav-inner a.btn-nav {
+      background: #0071e3; color: #fff; font-size: 12px;
+      padding: 4px 12px; border-radius: 980px;
+    }
+    .nav-inner a.btn-nav:hover { background: #0077ed; color: #fff; }
 
     .hero { text-align: center; padding: 96px 22px 48px; }
-    .hero img.icon { width: 128px; height: 128px; border-radius: 28px;
-      box-shadow: 0 12px 40px rgba(0,0,0,0.14); }
+    .hero img.icon { width: 150px; height: 150px; }
     .hero h1 {
       font-size: clamp(48px, 8vw, 76px); font-weight: 700;
       letter-spacing: -0.02em; line-height: 1.06; margin-top: 34px;
@@ -57,10 +75,12 @@
       display: inline-block; padding: 12px 26px; border-radius: 980px;
       font-size: 17px; font-weight: 500;
       background: var(--ink); color: #fff;
+      border: 1px solid var(--ink);
+      min-width: 170px; text-align: center; box-sizing: border-box;
       transition: opacity .15s ease;
     }
     .btn:hover { opacity: .82; }
-    .btn.ghost { background: transparent; color: var(--ink); border: 1px solid rgba(0,0,0,0.25); }
+    .btn.ghost { background: transparent; color: var(--ink); border-color: rgba(0,0,0,0.25); }
     .hero .shot { margin: 64px auto 0; max-width: 1080px; padding: 0 10px; }
 
     .shot img {
@@ -120,57 +140,83 @@
       border-top: 1px solid rgba(0,0,0,0.06);
     }
     footer .paw { width: 20px; opacity: .5; display: block; margin: 0 auto 10px; }
+
+    /* animacoes: reveal no scroll + parallax + entrada do hero */
+    .reveal {
+      opacity: 0; transform: translateY(28px);
+      transition: opacity .9s cubic-bezier(.16,1,.3,1), transform .9s cubic-bezier(.16,1,.3,1);
+      transition-delay: var(--d, 0s);
+      will-change: opacity, transform;
+    }
+    .reveal.in { opacity: 1; transform: none; }
+
+    @keyframes rise { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+    @keyframes pop { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: scale(1); } }
+    .hero img.icon { animation: pop 1s cubic-bezier(.16,1,.3,1) both; }
+    .hero h1 { animation: rise .9s cubic-bezier(.16,1,.3,1) .15s both; }
+    .hero p.sub { animation: rise .9s cubic-bezier(.16,1,.3,1) .3s both; }
+    .hero .cta { animation: rise .9s cubic-bezier(.16,1,.3,1) .45s both; }
+    .hero .shot { animation: rise 1.1s cubic-bezier(.16,1,.3,1) .6s both; }
+
+    .parallax { will-change: transform; }
+
+    @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+    .privacy img { animation: float 5s ease-in-out infinite; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .reveal { opacity: 1; transform: none; transition: none; }
+      .hero img.icon, .hero h1, .hero p.sub, .hero .cta, .hero .shot, .privacy img { animation: none; }
+    }
   </style>
 </head>
 <body>
 
 <nav>
   <div class="nav-inner">
-    <img src="assets/icon.png" alt="">
-    Zeca
-    <span class="spacer"></span>
-    <a class="minor" href="#transcricao">Transcrição</a>
-    <a class="minor" href="#resumo">Resumo</a>
-    <a class="minor" href="#dia">Seu dia</a>
-    <a class="minor" href="#privacidade">Privacidade</a>
+    <a href="#" aria-label="Zeca"><img src="assets/zeca.svg" alt=""></a>
+    <a href="#transcription">Live transcript</a>
+    <a href="#summary">Summary</a>
+    <a href="#day">Your day</a>
+    <a href="#privacy">Privacy</a>
+    <a class="btn-nav" href="#">Download</a>
   </div>
 </nav>
 
 <header class="hero">
-  <img class="icon" src="assets/icon.png" alt="Ícone do Zeca">
-  <h1>Suas reuniões,<br>entendidas.</h1>
-  <p class="sub">O Zeca grava, transcreve e resume cada reunião enquanto ela acontece. Tudo roda no seu Mac.</p>
+  <img class="icon" src="assets/zeca.svg" alt="Zeca logo">
+  <h1>Your meetings,<br>understood.</h1>
+  <p class="sub">Zeca records, transcribes and summarizes every meeting as it happens. Everything runs on your Mac.</p>
   <div class="cta">
-    <a class="btn" href="#">Baixar para Mac</a>
-    <a class="btn ghost" href="#transcricao">Conhecer</a>
+    <a class="btn" href="#">Download for Mac</a>
+    <a class="btn ghost" href="#transcription">Learn more</a>
   </div>
-  <div class="shot"><img src="assets/detail.png" alt="Tela de detalhes de uma reunião no Zeca, com resumo e conversa transcrita por falante"></div>
+  <div class="shot"><img src="assets/detail.png" alt="Zeca meeting view with summary and speaker-separated transcript"></div>
 </header>
 
-<section class="feature" id="transcricao">
+<section class="feature" id="transcription">
   <div class="feature-inner">
-    <div class="eyebrow">Transcrição ao vivo</div>
-    <h2>Cada frase, no momento<br>em que é dita.</h2>
-    <p class="lead">Você fala, o texto aparece. A transcrição roda durante a gravação, frase a frase, com o seu lado da conversa separado do lado dos outros. Entende dezenas de idiomas e descobre sozinha qual está sendo falado.</p>
-    <div class="shot"><img src="assets/live.png" alt="Tela de gravação ao vivo com cronômetro, medidores de fala e transcrição em tempo real"></div>
+    <div class="eyebrow">Live transcription</div>
+    <h2>Every sentence,<br>the moment it's said.</h2>
+    <p class="lead">You talk, the text shows up. Transcription runs while you record, sentence by sentence, with your side of the conversation kept apart from everyone else's. It understands dozens of languages and figures out which one is being spoken.</p>
+    <div class="shot"><img src="assets/live.png" alt="Live recording screen with timer, speech meters and real-time transcript"></div>
   </div>
 </section>
 
-<section class="feature alt" id="resumo">
+<section class="feature alt" id="summary">
   <div class="feature-inner">
-    <div class="eyebrow">Inteligência</div>
-    <h2>Sai da reunião<br>com a ata pronta.</h2>
-    <p class="lead">Quando você para de gravar, o resumo já está pronto: o que foi discutido, o que ficou decidido e o que falta fazer. Durante a conversa, ele se atualiza a cada minuto. E cada fala tem dono, porque o Zeca reconhece quem está falando pela voz.</p>
-    <div class="shot"><img src="assets/detail.png" alt="Resumo automático da reunião com pontos principais e próximos passos"></div>
+    <div class="eyebrow">Intelligence</div>
+    <h2>Leave the meeting<br>with the notes done.</h2>
+    <p class="lead">When you stop recording, the summary is already there: what was discussed, what was decided and what's left to do. During the call it refreshes every minute. And every line has an owner, because Zeca recognizes who's speaking by voice.</p>
+    <div class="shot"><img src="assets/detail.png" alt="Automatic meeting summary with key points and next steps"></div>
   </div>
 </section>
 
-<section class="feature" id="dia">
+<section class="feature" id="day">
   <div class="feature-inner">
-    <div class="eyebrow">Seu dia</div>
-    <h2>A agenda e as reuniões,<br>num só lugar.</h2>
-    <p class="lead">O dashboard mostra os compromissos de hoje, com um clique para entrar na call já gravando. E conta quanto da sua semana foi parar em reunião.</p>
-    <div class="shot"><img src="assets/dashboard.png" alt="Dashboard com agenda do dia e gráfico de reuniões da semana"></div>
+    <div class="eyebrow">Your day</div>
+    <h2>Your schedule and your meetings,<br>in one place.</h2>
+    <p class="lead">The dashboard shows today's events, with one click to join the call already recording. It also tells you how much of your week went to meetings.</p>
+    <div class="shot"><img src="assets/dashboard.png" alt="Dashboard with today's schedule and weekly meetings chart"></div>
   </div>
 </section>
 
@@ -178,47 +224,87 @@
   <div class="grid">
     <div class="card">
       <div class="glyph">🎙️</div>
-      <h3>Dois lados da conversa</h3>
-      <p>Grava o microfone e o áudio do sistema em trilhas separadas. Funciona com qualquer app de reunião.</p>
+      <h3>Both sides of the call</h3>
+      <p>Records your microphone and the system audio as separate tracks. Works with any meeting app.</p>
     </div>
     <div class="card">
       <div class="glyph">👥</div>
-      <h3>Quem disse o quê</h3>
-      <p>Identifica os participantes por voz e separa as falas. Renomeie com dois cliques.</p>
+      <h3>Who said what</h3>
+      <p>Identifies participants by voice and splits the lines. Rename anyone with a double click.</p>
     </div>
     <div class="card">
       <div class="glyph">✍️</div>
-      <h3>Título automático</h3>
-      <p>Esqueceu de nomear? O Zeca batiza a reunião pelo assunto da conversa.</p>
+      <h3>Automatic titles</h3>
+      <p>Forgot to name it? Zeca titles the meeting after what was actually discussed.</p>
     </div>
     <div class="card">
       <div class="glyph">🌎</div>
-      <h3>Multilíngue de verdade</h3>
-      <p>Português, inglês, espanhol e dezenas de outros. Pode até misturar na mesma reunião.</p>
+      <h3>Actually multilingual</h3>
+      <p>English, Portuguese, Spanish and dozens more. Even mixed in the same meeting.</p>
     </div>
     <div class="card">
       <div class="glyph">⏸️</div>
-      <h3>Pausa quando precisar</h3>
-      <p>O que acontece na pausa fica fora da gravação, da transcrição e do resumo.</p>
+      <h3>Pause anytime</h3>
+      <p>Whatever happens while paused stays out of the recording, the transcript and the summary.</p>
     </div>
     <div class="card">
       <div class="glyph">🐶</div>
-      <h3>Sempre à mão</h3>
-      <p>O tempo e o título da gravação ficam na barra de menus. Pausar ou parar não exige trocar de janela.</p>
+      <h3>Always within reach</h3>
+      <p>The timer and the meeting title live in the menu bar. Pausing or stopping never means switching windows.</p>
     </div>
   </div>
 </section>
 
-<section class="privacy" id="privacidade">
+<section class="privacy" id="privacy">
   <img src="assets/silhouette.png" alt="">
-  <h2>Nada sai do seu Mac.</h2>
-  <p>O áudio nunca deixa o seu computador. A transcrição e a identificação de falantes rodam no próprio Mac, no Neural Engine. A única coisa que vai pra nuvem é o resumo, feito com a sua chave da API. Sem chave, sem nuvem.</p>
+  <h2>Nothing leaves your Mac.</h2>
+  <p>Audio never leaves your computer. Transcription and speaker identification run on the Mac itself, on the Neural Engine. The only thing that touches the cloud is the summary, made with your own API key. No key, no cloud.</p>
 </section>
 
 <footer>
   <img class="paw" src="assets/silhouette.png" alt="">
-  Zeca. Feito com carinho, e com um cachorro de verdade.
+  Zeca. Made with care, and with a real dog.
 </footer>
 
+
+<script>
+(() => {
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduced) return;
+
+  // reveal: tudo que entra na viewport sobe e aparece; cards em cascata
+  const targets = document.querySelectorAll(
+    'section .eyebrow, section h2, section .lead, section .shot, .card, .privacy img, .privacy h2, .privacy p, footer');
+  targets.forEach(el => el.classList.add('reveal'));
+  document.querySelectorAll('.card').forEach((el, i) => el.style.setProperty('--d', (i % 3) * 0.12 + 's'));
+  const io = new IntersectionObserver(entries => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+  }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+  targets.forEach(el => io.observe(el));
+
+  // parallax: screenshots andam mais devagar que o scroll
+  const layers = [...document.querySelectorAll('.shot img')].map(el => {
+    el.parentElement.classList.add('parallax');
+    return el.parentElement;
+  });
+  const logo = document.querySelector('.hero img.icon');
+  let ticking = false;
+  addEventListener('scroll', () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      const vh = innerHeight;
+      for (const el of layers) {
+        const r = el.getBoundingClientRect();
+        if (r.bottom < -100 || r.top > vh + 100) continue;
+        const progress = (r.top + r.height / 2 - vh / 2) / vh; // -0.5..0.5 na tela
+        el.style.transform = `translate3d(0, ${progress * 42}px, 0)`;
+      }
+      if (logo) logo.style.translate = `0 ${scrollY * 0.35}px`;
+      ticking = false;
+    });
+  }, { passive: true });
+})();
+</script>
 </body>
 </html>
