@@ -1,95 +1,146 @@
 import SwiftUI
 
-/// Configuracoes do app (menu Zeca AI > Settings ou Cmd+,).
+/// Configuracoes (menu Zeca AI > Settings ou Cmd+,), com abas laterais no estilo do Hex.
 struct SettingsView: View {
-    @AppStorage("asrModel") private var modelId = "parakeet-v3"
+    enum Tab: String, CaseIterable, Identifiable {
+        case transcription
+        case summary
+        case calendar
+
+        var id: String { rawValue }
+
+        var label: (String, systemImage: String) {
+            switch self {
+            case .transcription: return ("Transcription", "waveform")
+            case .summary: return ("Summary", "sparkles")
+            case .calendar: return ("Calendar", "calendar")
+            }
+        }
+    }
+
+    @State private var tab: Tab? = .transcription
     @AppStorage("asrLanguage") private var language = "auto"
     @EnvironmentObject private var summarizer: Summarizer
+    @ObservedObject private var google = GoogleCalendar.shared
 
     private let languages: [(code: String, label: String)] = [
-        ("auto", "Detectar automaticamente"),
-        ("pt", "Português"),
-        ("en", "Inglês"),
-        ("es", "Espanhol"),
-        ("fr", "Francês"),
-        ("de", "Alemão"),
+        ("auto", "Detect automatically"),
+        ("pt", "Portuguese"),
+        ("en", "English"),
+        ("es", "Spanish"),
+        ("fr", "French"),
+        ("de", "German"),
     ]
 
     var body: some View {
-        Form {
-            Section("Modelo de transcrição") {
-                ForEach(AsrModelInfo.catalog) { model in
-                    ModelRow(model: model, selected: model.id == modelId)
-                        .contentShape(Rectangle())
-                        .onTapGesture { modelId = model.id }
+        NavigationSplitView {
+            List(Tab.allCases, selection: $tab) { item in
+                Label(item.label.0, systemImage: item.label.systemImage)
+                    .tag(item)
+            }
+            .navigationSplitViewColumnWidth(min: 160, ideal: 170)
+        } detail: {
+            Form {
+                switch tab ?? .transcription {
+                case .transcription: transcriptionTab
+                case .summary: summaryTab
+                case .calendar: calendarTab
                 }
-                Text("A transcrição ao vivo usa Parakeet (único com streaming). Se um Whisper estiver selecionado, ele vale para a transcrição final e o \"Refazer transcrição\".")
+            }
+            .formStyle(.grouped)
+        }
+        .frame(width: 680, height: 480)
+    }
+
+    // MARK: - Abas
+
+    @ViewBuilder
+    private var transcriptionTab: some View {
+        Section("Language") {
+            Picker("Transcription language", selection: $language) {
+                ForEach(languages, id: \.code) { item in
+                    Text(item.label).tag(item.code)
+                }
+            }
+            Text("Applies to live transcription and \"Redo analysis\". \"Detect automatically\" handles mixed-language meetings.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var summaryTab: some View {
+        Section("Output") {
+            Picker("Language", selection: Binding(
+                get: { summarizer.summaryLanguage }, set: { summarizer.summaryLanguage = $0 })) {
+                ForEach(Summarizer.languages, id: \.code) { item in
+                    Text(item.label).tag(item.code)
+                }
+            }
+            Text("Applies to the summary, the point by point and automatic titles.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        Section("Provider") {
+            Picker("Provider", selection: Binding(
+                get: { summarizer.provider }, set: { summarizer.provider = $0 })) {
+                Text("Claude (API)").tag("claude")
+                Text("On-device (Apple Intelligence)").tag("local")
+            }
+            .pickerStyle(.radioGroup)
+            if summarizer.usesLocal {
+                Text(Summarizer.localAvailable
+                     ? "Runs on Apple's built-in on-device model. Nothing to install, nothing leaves your Mac. Long meetings are summarized in two passes."
+                     : "Not available on this Mac. It needs macOS 26 with Apple Intelligence enabled in System Settings.")
+                    .font(.caption)
+                    .foregroundStyle(Summarizer.localAvailable ? Color.secondary : .orange)
+            } else {
+                SecureField("Anthropic API key", text: Binding(
+                    get: { summarizer.apiKey }, set: { summarizer.apiKey = $0 }))
+                Text("Used only for summaries. Stored on your Mac.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("Idioma") {
-                Picker("Idioma da transcrição", selection: $language) {
-                    ForEach(languages, id: \.code) { item in
-                        Text(item.label).tag(item.code)
+        }
+    }
+
+    @ViewBuilder
+    private var calendarTab: some View {
+        Section("Google Calendar") {
+            if google.isConnected {
+                LabeledContent("Status") {
+                    Label("Connected", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+                Button("Disconnect") { google.disconnect() }
+            } else {
+                TextField("OAuth Client ID", text: $google.clientId)
+                SecureField("OAuth Client Secret", text: $google.clientSecret)
+                HStack {
+                    Button(google.connecting ? "Waiting for browser..." : "Connect Google account") {
+                        google.connect()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(google.connecting || google.clientId.isEmpty)
+                    if google.connecting {
+                        Button("Cancel") { google.cancelConnect() }
                     }
                 }
-            }
-            Section("Resumo") {
-                SecureField("Chave da API da Anthropic", text: Binding(
-                    get: { summarizer.apiKey }, set: { summarizer.apiKey = $0 }))
-                Text("Usada só para os resumos. Fica salva no seu Mac.")
+                Text("Create a Desktop-app OAuth client at console.cloud.google.com (APIs & Services > Credentials), enable the Google Calendar API, and paste the ID and secret here. Read-only access; tokens stay on your Mac.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Link("Open Google Cloud Console",
+                     destination: URL(string: "https://console.cloud.google.com/apis/credentials")!)
+                    .font(.caption)
+            }
+            if let error = google.error {
+                Text(error).font(.caption).foregroundStyle(.red)
             }
         }
-        .formStyle(.grouped)
-        .frame(width: 520, height: 560)
-    }
-}
-
-private struct ModelRow: View {
-    let model: AsrModelInfo
-    let selected: Bool
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(selected ? Color.primary : .secondary)
-                .font(.title3)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text(model.name).fontWeight(.medium)
-                    Text(model.languages)
-                        .font(.caption2)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.quaternary, in: Capsule())
-                }
-                HStack(spacing: 14) {
-                    Stars(label: "Precisão", count: model.accuracyStars, tint: .primary)
-                    Stars(label: "Velocidade", count: model.speedStars, tint: .secondary)
-                    Text(model.storage).font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
-        }
-        .padding(.vertical, 2)
-    }
-}
-
-private struct Stars: View {
-    let label: String
-    let count: Int
-    let tint: Color
-
-    var body: some View {
-        HStack(spacing: 3) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-            ForEach(0..<5, id: \.self) { index in
-                Image(systemName: index < count ? "star.fill" : "star")
-                    .font(.system(size: 8))
-                    .foregroundStyle(index < count ? tint : .secondary.opacity(0.4))
-            }
+        Section("macOS Calendar") {
+            Text("Events from the system calendar (including Google accounts added in System Settings > Internet Accounts) always appear on the dashboard.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }
