@@ -9,3 +9,4 @@ xcuserdata/
 # Node (site futuro)
 node_modules/
 dist/
+.wrangler/
