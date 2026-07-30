@@ -3,16 +3,20 @@ import Charts
 import EventKit
 import SwiftUI
 
-/// Le a agenda do usuario (EventKit) para o dashboard.
+/// Agenda do dia para o dashboard: junta o calendario do macOS (EventKit)
+/// com o Google Calendar (quando conectado) e remove duplicatas.
 @MainActor
 final class CalendarStore: ObservableObject {
-    @Published private(set) var todayEvents: [EKEvent] = []
+    @Published private(set) var todayEvents: [DayEvent] = []
     @Published private(set) var denied = false
     @Published private(set) var accessError: String?
 
     private let store = EKEventStore()
 
     func refresh() async {
+        var events: [DayEvent] = []
+
+        // EventKit (calendario do sistema)
         let granted: Bool
         do {
             granted = try await store.requestFullAccessToEvents()
@@ -21,15 +25,34 @@ final class CalendarStore: ObservableObject {
             granted = false
             accessError = error.localizedDescription
         }
-        guard granted else { denied = true; return }
-        denied = false
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: Date())
-        let end = calendar.date(byAdding: .day, value: 1, to: start)!
-        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
-        todayEvents = store.events(matching: predicate)
-            .filter { !$0.isAllDay }
-            .sorted { $0.startDate < $1.startDate }
+        denied = !granted
+        if granted {
+            let calendar = Calendar.current
+            let start = calendar.startOfDay(for: Date())
+            let end = calendar.date(byAdding: .day, value: 1, to: start)!
+            let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+            events += store.events(matching: predicate)
+                .filter { !$0.isAllDay }
+                .map { event in
+                    DayEvent(id: event.eventIdentifier ?? UUID().uuidString,
+                             title: event.title ?? "Untitled",
+                             start: event.startDate,
+                             end: event.endDate,
+                             link: Self.meetingLink(of: event))
+                }
+        }
+
+        // Google Calendar (conta conectada nas Configuracoes)
+        events += await GoogleCalendar.shared.todayEvents()
+
+        // Mesma reuniao nas duas fontes: fica uma (prefere a que tem link).
+        var seen: [String: DayEvent] = [:]
+        for event in events {
+            let key = "\(event.title.lowercased())|\(Int(event.start.timeIntervalSince1970 / 60))"
+            if let existing = seen[key], existing.link != nil, event.link == nil { continue }
+            seen[key] = event
+        }
+        todayEvents = seen.values.sorted { $0.start < $1.start }
     }
 
     /// Link de videoconferencia do evento, se houver.
@@ -67,21 +90,27 @@ struct DashboardView: View {
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .task { await calendar.refresh() }
+        .task {
+            // Atualiza ao abrir e depois a cada minuto (novos eventos, contas recem-adicionadas).
+            while !Task.isCancelled {
+                await calendar.refresh()
+                try? await Task.sleep(for: .seconds(60))
+            }
+        }
     }
 
     private var agendaSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Agenda de hoje", systemImage: "calendar").font(.title3.weight(.semibold))
+            Label("Today's schedule", systemImage: "calendar").font(.title3.weight(.semibold))
             if calendar.denied {
-                Text(calendar.accessError.map { "Erro ao pedir acesso: \($0)" }
-                     ?? "Sem acesso a agenda. Libere em Ajustes do Sistema > Privacidade > Calendarios.")
+                Text(calendar.accessError.map { "Couldn't request access: \($0)" }
+                     ?? "No calendar access. Allow it in System Settings > Privacy > Calendars.")
                     .foregroundStyle(.secondary)
-                Button("Tentar de novo") { Task { await calendar.refresh() } }
+                Button("Try again") { Task { await calendar.refresh() } }
             } else if calendar.todayEvents.isEmpty {
-                Text("Nenhum evento hoje.").foregroundStyle(.secondary)
+                Text("No events today.").foregroundStyle(.secondary)
             } else {
-                ForEach(calendar.todayEvents, id: \.eventIdentifier) { event in
+                ForEach(calendar.todayEvents) { event in
                     EventRow(event: event, onRecord: onRecord)
                 }
             }
@@ -91,16 +120,16 @@ struct DashboardView: View {
     private var insightsSection: some View {
         let week = weekStats()
         return VStack(alignment: .leading, spacing: 10) {
-            Label("Esta semana", systemImage: "chart.bar.fill").font(.title3.weight(.semibold))
+            Label("This week", systemImage: "chart.bar.fill").font(.title3.weight(.semibold))
             HStack(spacing: 24) {
-                StatBox(value: "\(week.count)", label: week.count == 1 ? "reunião" : "reuniões")
+                StatBox(value: "\(week.count)", label: week.count == 1 ? "meeting" : "meetings")
                 StatBox(value: Duration.seconds(week.totalSeconds).formatted(.time(pattern: .hourMinute)),
-                        label: "gravado")
+                        label: "recorded")
             }
             Chart(week.perDay, id: \.day) { item in
                 BarMark(
-                    x: .value("Dia", item.day, unit: .day),
-                    y: .value("Minutos", item.minutes)
+                    x: .value("Day", item.day, unit: .day),
+                    y: .value("Minutes", item.minutes)
                 )
                 .foregroundStyle(Color.primary.opacity(0.8))
                 .cornerRadius(4)
@@ -151,32 +180,31 @@ struct DashboardView: View {
 }
 
 private struct EventRow: View {
-    let event: EKEvent
+    let event: DayEvent
     let onRecord: (String, URL?) -> Void
 
     var body: some View {
-        let link = CalendarStore.meetingLink(of: event)
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(event.title ?? "Sem título").fontWeight(.medium)
-                Text("\(event.startDate.formatted(date: .omitted, time: .shortened)) – \(event.endDate.formatted(date: .omitted, time: .shortened))")
+                Text(event.title).fontWeight(.medium)
+                Text("\(event.start.formatted(date: .omitted, time: .shortened)) – \(event.end.formatted(date: .omitted, time: .shortened))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if link != nil {
-                Button("Entrar e gravar", systemImage: "video.fill") {
-                    onRecord(event.title ?? "", link)
+            if event.link != nil {
+                Button("Join & record", systemImage: "video.fill") {
+                    onRecord(event.title, event.link)
                 }
                 .buttonStyle(.borderedProminent)
             } else {
-                Button("Gravar", systemImage: "record.circle") {
-                    onRecord(event.title ?? "", nil)
+                Button("Record", systemImage: "record.circle") {
+                    onRecord(event.title, nil)
                 }
             }
         }
         .padding(10)
-        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+        .zecaGlass(in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -192,6 +220,6 @@ private struct StatBox: View {
         }
         .padding(12)
         .frame(minWidth: 110, alignment: .leading)
-        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+        .zecaGlass(in: RoundedRectangle(cornerRadius: 12))
     }
 }
