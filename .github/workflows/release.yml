@@ -42,6 +42,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ditto -c -k --keepParent build/Build/Products/Release/ZecaAI.app ZecaAI.zip
-          bash scripts/package-dmg.sh build/Build/Products/Release/ZecaAI.app ZecaAI.dmg
-          gh release upload '${{ needs.release-please.outputs.tag_name }}' ZecaAI.zip ZecaAI.dmg
+          ditto -c -k --keepParent build/Build/Products/Release/ZecaAI.app build/ZecaAI.zip
+          bash scripts/package-dmg.sh build/Build/Products/Release/ZecaAI.app build/ZecaAI.dmg
+          gh release upload '${{ needs.release-please.outputs.tag_name }}' build/ZecaAI.zip build/ZecaAI.dmg

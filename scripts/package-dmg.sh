@@ -4,7 +4,8 @@
 set -euo pipefail
 
 APP="${1:?uso: package-dmg.sh <ZecaAI.app> [saida.dmg]}"
-OUT="${2:-ZecaAI.dmg}"
+OUT="${2:-build/ZecaAI.dmg}"
+mkdir -p "$(dirname "$OUT")"
 
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
