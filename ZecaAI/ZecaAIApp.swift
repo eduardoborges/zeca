@@ -5,7 +5,6 @@ struct ZecaAIApp: App {
     @StateObject private var recorder = Recorder()
     @StateObject private var transcriber = Transcriber()
     @StateObject private var summarizer = Summarizer()
-    @StateObject private var speakerLabeler = SpeakerLabeler()
 
     var body: some Scene {
         WindowGroup(id: "main") {
@@ -13,7 +12,6 @@ struct ZecaAIApp: App {
                 .environmentObject(recorder)
                 .environmentObject(transcriber)
                 .environmentObject(summarizer)
-                .environmentObject(speakerLabeler)
         }
         .defaultSize(width: 900, height: 560)
 

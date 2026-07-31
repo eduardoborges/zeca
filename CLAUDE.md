@@ -44,7 +44,7 @@ is picked up automatically — no pbxproj editing for new sources.
 | `AudioSink.swift` | SCStream output → AAC files + 16kHz mono chunks for live transcription |
 | `LiveSession.swift` | Live pipeline: silence-based sentence segmentation (Hex-style whole-utterance decode), levels, per-minute live summary |
 | `Transcriber.swift` | `Turn`/`Speaker` types, offline Parakeet transcription, shared model loader (reentrant) |
-| `SpeakerLabeler.swift` | Diarization of the system track → `Speaker N` labels |
+| `LocalLLM.swift` | Embedded on-device LLM (MLX): model catalog, download/delete, generation |
 | `Summarizer.swift` | Claude API + Apple Intelligence providers, summary/notes/title/translation prompts, output-language setting |
 | `GoogleCalendar.swift` | OAuth PKCE + loopback server, event fetch, `DayEvent` |
 | `Dashboard.swift` | Overview screen: agenda (EventKit + Google merged) and weekly stats |
@@ -60,8 +60,10 @@ destroys Parakeet quality — do not reintroduce it.
 
 There are no unit tests; features are verified by driving the real app:
 
-- Speak into a recording with `say -v Luciana "..."` (system audio is captured as
-  "Others"; the mic picks it up too). Two different voices test diarization.
+- Speak into a recording with `say -v Luciana "..."` (system audio is captured
+  as "Others"; the mic no longer hears it thanks to echo cancellation).
+  Speakers are only "You"/"Others" — diarization was removed on purpose
+  (it confused the summarizer); don't reintroduce it.
 - Drive the UI via `osascript` System Events (window 1 → `splitter group 1` →
   sidebar outline / detail scroll area). AX titles are mostly `missing value`;
   find buttons by `description`.

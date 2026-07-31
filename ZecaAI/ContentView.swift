@@ -286,7 +286,6 @@ private struct RecordingDetail: View {
     var onDelete: () -> Void = {}
     @EnvironmentObject private var transcriber: Transcriber
     @EnvironmentObject private var summarizer: Summarizer
-    @EnvironmentObject private var labeler: SpeakerLabeler
     @EnvironmentObject private var recorder: Recorder
     @State private var turns: [Turn] = []
     @State private var summary: String?
@@ -322,7 +321,6 @@ private struct RecordingDetail: View {
             translatedTurns = nil
             translationCode = nil
             summarizer.error = nil
-            labeler.error = nil
             editingTitle = false
             await autoProcess()
         }
@@ -350,10 +348,6 @@ private struct RecordingDetail: View {
         if turns.isEmpty {
             guard let transcribed = await transcriber.run(recording), !transcribed.isEmpty else { return }
             turns = transcribed
-        }
-        if !turns.contains(where: { $0.who != nil }), turns.contains(where: { $0.speaker == .others }),
-           let labeled = await labeler.run(recording, turns: turns) {
-            turns = labeled
         }
     }
 
@@ -537,15 +531,13 @@ private struct RecordingDetail: View {
     }
 
     private var isBusy: Bool {
-        transcriber.status != nil || labeler.isRunning || summarizer.isRunning
+        transcriber.status != nil || summarizer.isRunning
     }
 
     private var busyLabel: String {
-        transcriber.status ?? summarizer.status ?? (labeler.isRunning
-            ? "Identifying speakers..."
-            : generatingNotes
-                ? "Writing notes with \(summarizer.providerName)..."
-                : "Summarizing with \(summarizer.providerName)...")
+        transcriber.status ?? summarizer.status ?? (generatingNotes
+            ? "Writing notes with \(summarizer.providerName)..."
+            : "Summarizing with \(summarizer.providerName)...")
     }
 
     /// Refaz a transcricao (modelo das Configuracoes) e por cima o resumo e o ponto a ponto.
@@ -643,15 +635,6 @@ private struct RecordingDetail: View {
                 Text("No speech detected in this recording.")
                     .foregroundStyle(.secondary)
             } else {
-                if labeler.isRunning {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("Identifying speakers...").font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                if let error = labeler.error {
-                    Text(error).font(.caption).foregroundStyle(.secondary)
-                }
                 if let code = translationCode,
                    let name = Summarizer.languages.first(where: { $0.code == code })?.label {
                     HStack(spacing: 8) {

@@ -5,7 +5,7 @@ entirely on the user's Mac.
 
 - Records microphone and system audio as separate tracks (works with any meeting app)
 - Live transcription (Parakeet TDT v3 on the Neural Engine), multilingual with automatic language detection
-- Speaker identification by voice (diarization)
+- Clean two-track separation: your mic ("You") and everyone else ("Others")
 - Summaries: quick recap plus per-person next steps, and a detailed point-by-point account
 - Summary providers: Claude API (user's key) or fully on-device with Apple Intelligence
 - On-demand translation of transcript, summary and notes
