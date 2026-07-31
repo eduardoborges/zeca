@@ -48,7 +48,7 @@ final class Summarizer: ObservableObject {
 
     /// Nome exibido nos indicadores de progresso.
     var providerName: String {
-        if usesMLX { return LocalLLM.displayName }
+        if usesMLX { return LocalLLM.shared.displayName }
         if usesLocal { return "Apple Intelligence (on-device)" }
         let short = Self.claudeModels.first { $0.id == claudeModel }
             .map { $0.label.components(separatedBy: " (")[0] }
@@ -183,7 +183,7 @@ final class Summarizer: ObservableObject {
     /// passam pelas mesmas duas etapas do provider local.
     private func completeMLX(system: String, user: String) async -> String? {
         guard LocalLLM.shared.state == .ready else {
-            error = "The Qwen 3 model is still downloading. Follow the progress in Settings > Summary."
+            error = "The on-device model is still downloading. Follow the progress in Settings."
             return nil
         }
         LocalLLM.shared.onStatus = { [weak self] in self?.status = $0 }

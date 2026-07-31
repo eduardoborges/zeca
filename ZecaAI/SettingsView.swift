@@ -1,24 +1,7 @@
 import SwiftUI
 
-/// Configuracoes (menu Zeca AI > Settings ou Cmd+,), com abas laterais no estilo do Hex.
+/// Configuracoes (menu Zeca AI > Settings ou Cmd+,), tudo num form unico por secoes.
 struct SettingsView: View {
-    enum Tab: String, CaseIterable, Identifiable {
-        case transcription
-        case summary
-        case calendar
-
-        var id: String { rawValue }
-
-        var label: (String, systemImage: String) {
-            switch self {
-            case .transcription: return ("Transcription", "waveform")
-            case .summary: return ("Summary", "sparkles")
-            case .calendar: return ("Calendar", "calendar")
-            }
-        }
-    }
-
-    @State private var tab: Tab? = .transcription
     @AppStorage("asrLanguage") private var language = "auto"
     @EnvironmentObject private var summarizer: Summarizer
     @ObservedObject private var google = GoogleCalendar.shared
@@ -34,31 +17,22 @@ struct SettingsView: View {
     ]
 
     var body: some View {
-        NavigationSplitView {
-            List(Tab.allCases, selection: $tab) { item in
-                Label(item.label.0, systemImage: item.label.systemImage)
-                    .tag(item)
-            }
-            .navigationSplitViewColumnWidth(min: 160, ideal: 170)
-        } detail: {
-            Form {
-                switch tab ?? .transcription {
-                case .transcription: transcriptionTab
-                case .summary: summaryTab
-                case .calendar: calendarTab
-                }
-            }
-            .formStyle(.grouped)
+        Form {
+            transcriptionSection
+            summaryOutputSection
+            providerSection
+            calendarSection
         }
-        .frame(width: 680, height: 480)
+        .formStyle(.grouped)
+        .frame(width: 680, height: 640)
     }
 
-    // MARK: - Abas
+    // MARK: - Transcricao
 
     @ViewBuilder
-    private var transcriptionTab: some View {
-        Section("Language") {
-            Picker("Transcription language", selection: $language) {
+    private var transcriptionSection: some View {
+        Section("Transcription") {
+            Picker("Language", selection: $language) {
                 ForEach(languages, id: \.code) { item in
                     Text(item.label).tag(item.code)
                 }
@@ -69,9 +43,11 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Saida do resumo
+
     @ViewBuilder
-    private var summaryTab: some View {
-        Section("Output") {
+    private var summaryOutputSection: some View {
+        Section("Summary output") {
             Picker("Language", selection: Binding(
                 get: { summarizer.summaryLanguage }, set: { summarizer.summaryLanguage = $0 })) {
                 ForEach(Summarizer.languages, id: \.code) { item in
@@ -82,48 +58,28 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        Section("Provider") {
+    }
+
+    // MARK: - Provider do resumo
+
+    @ViewBuilder
+    private var providerSection: some View {
+        Section("Summary provider") {
             Picker("Provider", selection: Binding(
                 get: { summarizer.provider },
                 set: {
                     summarizer.provider = $0
-                    // Ja dispara o download do modelo ao escolher o Qwen.
+                    // Ja dispara o download do modelo ao escolher o on-device.
                     if $0 == "mlx" { llm.prepare() }
                 })) {
                 Text("Claude (API)").tag("claude")
-                Text("On-device (Qwen 3, built-in)").tag("mlx")
+                Text("On-device (built-in)").tag("mlx")
                 Text("On-device (Apple Intelligence)").tag("local")
             }
             .pickerStyle(.radioGroup)
+
             if summarizer.usesMLX {
-                Text("Qwen 3 4B running inside the app (MLX). Nothing to install, nothing leaves your Mac. Requires Apple Silicon.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                switch llm.state {
-                case .ready:
-                    Label("Model downloaded and ready.", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                case .downloading(let fraction):
-                    VStack(alignment: .leading, spacing: 4) {
-                        ProgressView(value: fraction)
-                        HStack {
-                            Text("Downloading model... \(Int(fraction * 100))% of ~2.4 GB. Summaries stay unavailable until it finishes. Keep the app open.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Button("Restart download") { llm.restartDownload() }
-                                .help("Clears the partial download and starts over.")
-                        }
-                    }
-                case .notDownloaded:
-                    HStack {
-                        Text("The model (~2.4 GB) needs to be downloaded once.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Download model") { llm.prepare() }
-                    }
-                }
+                mlxRows
             } else if summarizer.usesLocal {
                 Text(Summarizer.localAvailable
                      ? "Runs on Apple's built-in on-device model. Nothing to install, nothing leaves your Mac. Long meetings are summarized in two passes."
@@ -146,8 +102,55 @@ struct SettingsView: View {
         }
     }
 
+    /// Linhas do provider embarcado: escolha de modelo, estado e acoes de download.
     @ViewBuilder
-    private var calendarTab: some View {
+    private var mlxRows: some View {
+        Picker("Model", selection: Binding(
+            get: { llm.modelID }, set: { llm.selectModel($0) })) {
+            ForEach(LocalLLM.models, id: \.id) { item in
+                Text(item.label).tag(item.id)
+            }
+        }
+        Text("Runs inside the app (MLX). Nothing to install, nothing leaves your Mac. Requires Apple Silicon.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+        switch llm.state {
+        case .ready:
+            HStack {
+                Label("Model downloaded and ready.", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Spacer()
+                Button("Delete model", role: .destructive) { llm.deleteModel() }
+                    .help("Removes the weights from disk. You can download them again anytime.")
+            }
+        case .downloading(let fraction):
+            VStack(alignment: .leading, spacing: 4) {
+                ProgressView(value: fraction)
+                HStack {
+                    Text("Downloading model... \(Int(fraction * 100))%. Summaries stay unavailable until it finishes. Keep the app open.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Restart download") { llm.restartDownload() }
+                        .help("Clears the partial download and starts over.")
+                }
+            }
+        case .notDownloaded:
+            HStack {
+                Text("The model needs to be downloaded once.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Download model") { llm.prepare() }
+            }
+        }
+    }
+
+    // MARK: - Calendario
+
+    @ViewBuilder
+    private var calendarSection: some View {
         Section("Google Calendar") {
             if google.isConnected {
                 LabeledContent("Status") {
