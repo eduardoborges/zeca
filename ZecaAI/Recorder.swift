@@ -91,6 +91,7 @@ final class Recorder: ObservableObject {
 
     private var stream: SCStream?
     private var sink: AudioSink?
+    private var mic: MicCapture?
     private var currentFolder: URL?
     private var sessionSummarizer: Summarizer?
 
@@ -129,18 +130,22 @@ final class Recorder: ObservableObject {
                 }
             }
 
-            let sink = AudioSink(
-                systemURL: folder.appendingPathComponent("system.m4a"),
-                micURL: folder.appendingPathComponent("mic.m4a"))
+            let sink = AudioSink(systemURL: folder.appendingPathComponent("system.m4a"))
             sink.onStop = { [weak self] error in
                 Task { @MainActor in
                     self?.error = error.localizedDescription
                     await self?.stop()
                 }
             }
-            // Chunks de 16kHz mono direto pro buffer da transcricao ao vivo (fila de audio).
-            sink.onSamples = { [box = live.box] speaker, samples in
-                box.append(speaker, samples)
+            // Chunks de 16kHz mono direto pro buffer da transcricao ao vivo.
+            sink.onSamples = { [box = live.box] samples in
+                box.append(.others, samples)
+            }
+            // Mic separado, com echo cancellation: a fala dos outros (que sai
+            // pelos alto-falantes) e removida do mic pelo AEC do sistema.
+            let mic = MicCapture(url: folder.appendingPathComponent("mic.m4a"))
+            mic.onSamples = { [box = live.box] samples in
+                box.append(.me, samples)
             }
 
             // Pede a permissao de gravacao de tela; lanca se o usuario negar.
@@ -154,7 +159,6 @@ final class Recorder: ObservableObject {
             let config = SCStreamConfiguration()
             config.capturesAudio = true
             config.excludesCurrentProcessAudio = true // senao grava o proprio playback
-            config.captureMicrophone = true           // macOS 15+: mic na mesma stream, ja alinhado
             config.sampleRate = 48_000
             config.channelCount = 2
             // Video e obrigatorio na stream; mantido no minimo.
@@ -164,11 +168,11 @@ final class Recorder: ObservableObject {
 
             let stream = SCStream(filter: filter, configuration: config, delegate: sink)
             try stream.addStreamOutput(sink, type: .audio, sampleHandlerQueue: sink.queue)
-            try stream.addStreamOutput(sink, type: .microphone, sampleHandlerQueue: sink.queue)
-            try await stream.startCapture()
-
             self.stream = stream
             self.sink = sink
+            self.mic = mic
+            try await stream.startCapture()
+            try mic.run()
             currentFolder = folder
             startedAt = Date()
             accumulated = 0
@@ -180,8 +184,11 @@ final class Recorder: ObservableObject {
             live.start(folder: folder, transcriber: transcriber, summarizer: summarizer)
         } catch {
             self.error = error.localizedDescription
+            try? await self.stream?.stopCapture()
+            self.mic?.close()
             self.stream = nil
             self.sink = nil
+            self.mic = nil
         }
     }
 
@@ -196,6 +203,7 @@ final class Recorder: ObservableObject {
         }
         isPaused.toggle()
         sink?.setPaused(isPaused)
+        mic?.setPaused(isPaused)
     }
 
     func stop() async {
@@ -210,8 +218,17 @@ final class Recorder: ObservableObject {
         accumulated = 0
         segmentStart = nil
         try? await stream?.stopCapture()
+        mic?.close()
+        sink?.close()
         if let folder = currentFolder {
-            sink?.close(metaURL: folder.appendingPathComponent("offsets.json"))
+            // Ambos os inicios estao no relogio host, entao a diferenca alinha as trilhas.
+            let systemStart = sink?.systemStart
+            let micStart = mic?.start
+            let base = min(systemStart ?? 0, micStart ?? 0)
+            let meta = TrackOffsets(system: (systemStart ?? base) - base, mic: (micStart ?? base) - base)
+            if let data = try? JSONEncoder().encode(meta) {
+                try? data.write(to: folder.appendingPathComponent("offsets.json"))
+            }
         }
         await live.stop()
         // Sem titulo do usuario: o Claude batiza a reuniao a partir da transcricao.
@@ -227,6 +244,7 @@ final class Recorder: ObservableObject {
         currentFolder = nil
         stream = nil
         sink = nil
+        mic = nil
         refresh()
     }
 
