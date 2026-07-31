@@ -1,11 +1,18 @@
 #!/bin/bash
-# Empacota o ZecaAI.app num DMG com atalho pra /Applications.
-# Uso: scripts/package-dmg.sh <caminho/ZecaAI.app> [saida.dmg]
+# Compila o ZecaAI (Release) e empacota build/ZecaAI.dmg com atalho pra /Applications.
+# Uso: scripts/package-dmg.sh  (sem argumentos)
 set -euo pipefail
+cd "$(dirname "$0")/.."
 
-APP="${1:?uso: package-dmg.sh <ZecaAI.app> [saida.dmg]}"
-OUT="${2:-build/ZecaAI.dmg}"
-mkdir -p "$(dirname "$OUT")"
+xcodebuild -project ZecaAI.xcodeproj -scheme ZecaAI -configuration Release build \
+  -derivedDataPath build \
+  -skipPackagePluginValidation -skipMacroValidation \
+  CODE_SIGNING_ALLOWED=NO \
+  ${MARKETING_VERSION:+MARKETING_VERSION="$MARKETING_VERSION"} \
+  -quiet
+
+APP="build/Build/Products/Release/ZecaAI.app"
+OUT="build/ZecaAI.dmg"
 
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT

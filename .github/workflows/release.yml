@@ -31,17 +31,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Metal Toolchain
         run: xcodebuild -downloadComponent MetalToolchain
-      - name: Build app
-        run: |
-          xcodebuild -project ZecaAI.xcodeproj -scheme ZecaAI -configuration Release build \
-            -derivedDataPath build \
-            -skipPackagePluginValidation -skipMacroValidation \
-            CODE_SIGNING_ALLOWED=NO \
-            MARKETING_VERSION=${{ needs.release-please.outputs.version }}
-      - name: Package and upload
+      - name: Build and package
+        env:
+          MARKETING_VERSION: ${{ needs.release-please.outputs.version }}
+        run: bash scripts/package-dmg.sh
+      - name: Upload
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ditto -c -k --keepParent build/Build/Products/Release/ZecaAI.app build/ZecaAI.zip
-          bash scripts/package-dmg.sh build/Build/Products/Release/ZecaAI.app build/ZecaAI.dmg
           gh release upload '${{ needs.release-please.outputs.tag_name }}' build/ZecaAI.zip build/ZecaAI.dmg

@@ -207,7 +207,9 @@ final class Summarizer: ObservableObject {
                 prompt: "These are partial summaries of consecutive parts of one meeting:\n\n" +
                     partials.joined(separator: "\n\n---\n\n"))
         } catch {
-            self.error = "On-device model error: \(error.localizedDescription)"
+            if !(error is CancellationError) {
+                self.error = "On-device model error: \(error.localizedDescription)"
+            }
             return nil
         }
     }
@@ -246,7 +248,7 @@ final class Summarizer: ObservableObject {
                 prompt: "These are partial summaries of consecutive parts of one meeting:\n\n" +
                     partials.joined(separator: "\n\n---\n\n"))
         } catch {
-            self.error = "Local model error: \(error.localizedDescription)"
+            if !(error is CancellationError) { self.error = "Local model error: \(error.localizedDescription)" }
             return nil
         }
     }
@@ -295,7 +297,7 @@ final class Summarizer: ObservableObject {
             }
             return text
         } catch {
-            self.error = error.localizedDescription
+            if !(error is CancellationError) { self.error = error.localizedDescription }
             return nil
         }
     }

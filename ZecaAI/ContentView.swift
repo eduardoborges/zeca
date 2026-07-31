@@ -293,6 +293,8 @@ private struct RecordingDetail: View {
     @State private var notes: String?
     @State private var generatingNotes = false
     @State private var generatingSummary = false
+    /// Task da geracao em andamento (resumo/ponto a ponto), cancelavel pelo usuario.
+    @State private var generationTask: Task<Void, Never>?
     @State private var translatedTurns: [Turn]?
     @State private var translationCode: String?
     @State private var translating = false
@@ -357,11 +359,20 @@ private struct RecordingDetail: View {
 
     private func summarize() {
         summarizer.error = nil
-        Task {
+        generationTask = Task {
             generatingSummary = true
-            summary = await summarizer.run(recording, turns: turns)
+            let result = await summarizer.run(recording, turns: turns)
+            if !Task.isCancelled { summary = result }
             generatingSummary = false
+            generationTask = nil
         }
+    }
+
+    private func cancelGeneration() {
+        generationTask?.cancel()
+        generationTask = nil
+        generatingSummary = false
+        generatingNotes = false
     }
 
     // MARK: - Header
@@ -442,6 +453,10 @@ private struct RecordingDetail: View {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.small)
                         Text(busyLabel).font(.callout).foregroundStyle(.secondary)
+                        if generationTask != nil {
+                            Button("Cancel") { cancelGeneration() }
+                                .help("Stops the summary or point by point being generated.")
+                        }
                     }
                 } else {
                     Menu {
@@ -536,28 +551,34 @@ private struct RecordingDetail: View {
     /// Refaz a transcricao (modelo das Configuracoes) e por cima o resumo e o ponto a ponto.
     private func redoEverything() {
         summarizer.error = nil
-        Task {
+        generationTask = Task {
             turns = []
             summary = nil
             notes = nil
             try? FileManager.default.removeItem(at: recording.transcriptURL)
             await autoProcess()
-            guard !turns.isEmpty else { return }
+            guard !turns.isEmpty, !Task.isCancelled else { generationTask = nil; return }
             generatingSummary = true
-            summary = await summarizer.run(recording, turns: turns)
+            let newSummary = await summarizer.run(recording, turns: turns)
+            if !Task.isCancelled { summary = newSummary }
             generatingSummary = false
+            guard !Task.isCancelled else { generationTask = nil; return }
             generatingNotes = true
-            notes = await summarizer.runNotes(recording, turns: turns)
+            let newNotes = await summarizer.runNotes(recording, turns: turns)
+            if !Task.isCancelled { notes = newNotes }
             generatingNotes = false
+            generationTask = nil
         }
     }
 
     private func generateNotes() {
         summarizer.error = nil
-        Task {
+        generationTask = Task {
             generatingNotes = true
-            notes = await summarizer.runNotes(recording, turns: turns)
+            let result = await summarizer.runNotes(recording, turns: turns)
+            if !Task.isCancelled { notes = result }
             generatingNotes = false
+            generationTask = nil
         }
     }
 
