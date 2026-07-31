@@ -1,0 +1,20 @@
+name: Health
+
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check zeca.eduardoborges.dev
+        run: |
+          fail=0
+          for path in / /robots.txt /sitemap.xml /llms.txt; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "https://zeca.eduardoborges.dev$path")
+            echo "$path -> $code"
+            [ "$code" = 200 ] || fail=1
+          done
+          exit $fail
