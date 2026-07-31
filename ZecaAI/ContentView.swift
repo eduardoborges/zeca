@@ -292,6 +292,7 @@ private struct RecordingDetail: View {
     @State private var summary: String?
     @State private var notes: String?
     @State private var generatingNotes = false
+    @State private var generatingSummary = false
     @State private var translatedTurns: [Turn]?
     @State private var translationCode: String?
     @State private var translating = false
@@ -356,7 +357,11 @@ private struct RecordingDetail: View {
 
     private func summarize() {
         summarizer.error = nil
-        Task { summary = await summarizer.run(recording, turns: turns) }
+        Task {
+            generatingSummary = true
+            summary = await summarizer.run(recording, turns: turns)
+            generatingSummary = false
+        }
     }
 
     // MARK: - Header
@@ -480,13 +485,13 @@ private struct RecordingDetail: View {
 
     @ViewBuilder
     private var summaryCard: some View {
-        if let summary, !summarizer.isRunning {
+        if let summary, !generatingSummary {
             GeneratedTextCard(title: "Summary", systemImage: "sparkles",
                               text: summary, folder: recording.url, kind: "summary")
                 .id(summary)
         } else {
             Card(title: "Summary", systemImage: "sparkles", tint: .primary) {
-                if summarizer.isRunning {
+                if generatingSummary {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
                         Text("Summarizing with \(summarizer.providerName)...").foregroundStyle(.secondary)
@@ -523,7 +528,9 @@ private struct RecordingDetail: View {
     private var busyLabel: String {
         transcriber.status ?? (labeler.isRunning
             ? "Identifying speakers..."
-            : "Summarizing with \(summarizer.providerName)...")
+            : generatingNotes
+                ? "Writing notes with \(summarizer.providerName)..."
+                : "Summarizing with \(summarizer.providerName)...")
     }
 
     /// Refaz a transcricao (modelo das Configuracoes) e por cima o resumo e o ponto a ponto.
@@ -536,7 +543,9 @@ private struct RecordingDetail: View {
             try? FileManager.default.removeItem(at: recording.transcriptURL)
             await autoProcess()
             guard !turns.isEmpty else { return }
+            generatingSummary = true
             summary = await summarizer.run(recording, turns: turns)
+            generatingSummary = false
             generatingNotes = true
             notes = await summarizer.runNotes(recording, turns: turns)
             generatingNotes = false
