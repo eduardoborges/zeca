@@ -189,7 +189,14 @@ final class LocalLLM: ObservableObject {
     func generate(system: String, prompt: String) async throws -> String {
         let container = try await loadContainer()
         let session = ChatSession(container, instructions: system)
-        return try await session.respond(to: prompt)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // Qwen3 base "pensa" por padrao e cospe <think>...</think>, gastando
+        // tempo e tokens; /no_think desliga e o strip abaixo cobre o resto.
+        let thinkingModel = modelID.contains("Qwen3") && !modelID.contains("Instruct")
+        var out = try await session.respond(to: thinkingModel ? prompt + " /no_think" : prompt)
+        if let closing = out.range(of: "</think>", options: .backwards) {
+            out = String(out[closing.upperBound...])
+        }
+        out = out.replacingOccurrences(of: "<think>", with: "")
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
