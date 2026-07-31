@@ -29,6 +29,58 @@ final class LocalLLM: ObservableObject {
     private var container: ModelContainer?
     private var loadTask: Task<ModelContainer, Error>?
 
+    // O hub so reporta progresso por arquivo completado (o peso e um unico arquivo
+    // de 2.3GB), entao a fracao fiel vem de medir bytes no disco: blobs ja movidos
+    // pro cache + o .tmp do URLSession crescendo.
+    private var progressTimer: Timer?
+    private var totalBytes: Int64 = 2_400_000_000 // estimativa; refinada pela API do HF
+
+    private func startProgressPolling() {
+        Task { [weak self] in
+            guard let url = URL(string: "https://huggingface.co/api/models/\(Self.modelID)?blobs=true"),
+                  let (data, _) = try? await URLSession.shared.data(from: url),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let siblings = json["siblings"] as? [[String: Any]] else { return }
+            let sum = siblings.reduce(Int64(0)) { $0 + Int64($1["size"] as? Int ?? 0) }
+            if sum > 0 { await MainActor.run { self?.totalBytes = sum } }
+        }
+        progressTimer?.invalidate()
+        progressTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, case .downloading = self.state else { return }
+                let fraction = min(0.99, Double(Self.bytesOnDisk()) / Double(self.totalBytes))
+                self.state = .downloading(fraction)
+                self.onStatus?("Downloading \(Self.displayName) (\(Int(fraction * 100))%)...")
+            }
+        }
+    }
+
+    private func stopProgressPolling() {
+        progressTimer?.invalidate()
+        progressTimer = nil
+    }
+
+    private static func bytesOnDisk() -> Int64 {
+        var total: Int64 = 0
+        let cache = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".cache/huggingface/hub/models--\(modelID.replacingOccurrences(of: "/", with: "--"))/blobs")
+        if let files = try? FileManager.default.contentsOfDirectory(at: cache, includingPropertiesForKeys: [.fileSizeKey]) {
+            total += files.reduce(0) { $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0) }
+        }
+        // Download em andamento: tmp do URLSession, so arquivos mexidos ha pouco.
+        let tmp = FileManager.default.temporaryDirectory
+        if let files = try? FileManager.default.contentsOfDirectory(
+            at: tmp, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]) {
+            for file in files where file.lastPathComponent.hasPrefix("CFNetworkDownload") {
+                guard let values = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
+                      let modified = values.contentModificationDate,
+                      Date().timeIntervalSince(modified) < 120 else { continue }
+                total += Int64(values.fileSize ?? 0)
+            }
+        }
+        return total
+    }
+
     private init() {
         state = Self.isCached ? .ready : .notDownloaded
     }
@@ -58,6 +110,7 @@ final class LocalLLM: ObservableObject {
         loadTask?.cancel()
         loadTask = nil
         container = nil
+        stopProgressPolling()
         let base = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".cache/huggingface/hub")
         let name = "models--\(Self.modelID.replacingOccurrences(of: "/", with: "--"))"
@@ -75,21 +128,17 @@ final class LocalLLM: ObservableObject {
     private func loadContainer() async throws -> ModelContainer {
         if let container { return container }
         if let loadTask { return try await loadTask.value }
-        if state == .notDownloaded { state = .downloading(0) }
-        let task = Task { [weak self] in
-            let container = try await #huggingFaceLoadModelContainer(
+        if state == .notDownloaded {
+            state = .downloading(0)
+            startProgressPolling()
+        }
+        let task = Task {
+            try await #huggingFaceLoadModelContainer(
                 configuration: ModelConfiguration(id: Self.modelID)
-            ) { progress in
-                Task { @MainActor [weak self] in
-                    guard let self, self.state != .ready else { return }
-                    self.state = .downloading(progress.fractionCompleted)
-                    self.onStatus?("Downloading \(Self.displayName) (\(Int(progress.fractionCompleted * 100))%)...")
-                }
-            }
-            return container
+            ) { _ in }
         }
         loadTask = task
-        defer { loadTask = nil; onStatus?(nil) }
+        defer { loadTask = nil; stopProgressPolling(); onStatus?(nil) }
         do {
             let loaded = try await task.value
             container = loaded
