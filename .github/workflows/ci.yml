@@ -12,7 +12,10 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+      - name: Metal Toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
       - name: Build
         run: |
           xcodebuild -project ZecaAI.xcodeproj -scheme ZecaAI -configuration Debug build \
+            -skipPackagePluginValidation -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO
