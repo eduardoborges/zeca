@@ -95,6 +95,12 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(Summarizer.localAvailable ? Color.secondary : .orange)
             } else {
+                Picker("Model", selection: Binding(
+                    get: { summarizer.claudeModel }, set: { summarizer.claudeModel = $0 })) {
+                    ForEach(Summarizer.claudeModels, id: \.id) { item in
+                        Text(item.label).tag(item.id)
+                    }
+                }
                 SecureField("Anthropic API key", text: Binding(
                     get: { summarizer.apiKey }, set: { summarizer.apiKey = $0 }))
                 Text("Used only for summaries. Stored on your Mac.")

@@ -9,6 +9,13 @@ final class Summarizer: ObservableObject {
     @AppStorage("anthropicKey") var apiKey = ""
     @AppStorage("summaryProvider") var provider = "claude" // "claude" | "local"
     @AppStorage("summaryLanguage") var summaryLanguage = "auto" // "auto" | codigo ISO
+    @AppStorage("claudeModel") var claudeModel = "claude-opus-5"
+
+    static let claudeModels: [(id: String, label: String)] = [
+        ("claude-opus-5", "Opus 5 (most capable)"),
+        ("claude-sonnet-5", "Sonnet 5 (balanced)"),
+        ("claude-haiku-4-5", "Haiku 4.5 (fastest)"),
+    ]
 
     static let languages: [(code: String, label: String)] = [
         ("auto", "Same as the meeting"),
@@ -32,7 +39,12 @@ final class Summarizer: ObservableObject {
     var usesLocal: Bool { provider == "local" }
 
     /// Nome exibido nos indicadores de progresso.
-    var providerName: String { usesLocal ? "Apple Intelligence (on-device)" : "Claude" }
+    var providerName: String {
+        if usesLocal { return "Apple Intelligence (on-device)" }
+        let short = Self.claudeModels.first { $0.id == claudeModel }
+            .map { $0.label.components(separatedBy: " (")[0] }
+        return short.map { "Claude \($0)" } ?? "Claude"
+    }
 
     /// Ha um provedor utilizavel configurado?
     var isConfigured: Bool { usesLocal || !apiKey.isEmpty }
@@ -204,7 +216,7 @@ final class Summarizer: ObservableObject {
     private func completeClaude(system: String, user: String, maxTokens: Int) async -> String? {
         guard !apiKey.isEmpty else { error = "Paste your Anthropic API key."; return nil }
         let body: [String: Any] = [
-            "model": "claude-opus-5",
+            "model": claudeModel,
             "max_tokens": maxTokens,
             "system": system,
             "messages": [["role": "user", "content": user]],
