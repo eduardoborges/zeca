@@ -105,10 +105,28 @@ struct SettingsView: View {
                         .foregroundStyle(.green)
                 case .downloading(let fraction):
                     VStack(alignment: .leading, spacing: 4) {
-                        ProgressView(value: fraction)
-                        Text("Downloading model... \(Int(fraction * 100))% of ~2.4 GB. Summaries stay unavailable until it finishes.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        // O peso e um arquivo unico de 2.3GB: o percentual so anda no fim.
+                        if fraction < 0.05 {
+                            HStack(spacing: 8) {
+                                ProgressView().controlSize(.small)
+                                Text("Downloading model (~2.4 GB)... this takes several minutes and the percentage may only move at the end. Keep the app open.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            ProgressView(value: fraction)
+                            Text("Downloading model... \(Int(fraction * 100))% of ~2.4 GB.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        HStack {
+                            Text("Summaries stay unavailable until it finishes.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Restart download") { llm.restartDownload() }
+                                .help("Clears the partial download and starts over.")
+                        }
                     }
                 case .notDownloaded:
                     HStack {

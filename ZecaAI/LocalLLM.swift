@@ -53,6 +53,24 @@ final class LocalLLM: ObservableObject {
         Task { _ = try? await loadContainer() }
     }
 
+    /// Download travou: cancela, apaga o cache parcial e recomeca do zero.
+    func restartDownload() {
+        loadTask?.cancel()
+        loadTask = nil
+        container = nil
+        let base = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".cache/huggingface/hub")
+        let name = "models--\(Self.modelID.replacingOccurrences(of: "/", with: "--"))"
+        try? FileManager.default.removeItem(at: base.appendingPathComponent(name))
+        try? FileManager.default.removeItem(at: base.appendingPathComponent(".locks/\(name)"))
+        state = .notDownloaded
+        // Pequena folga pra task antiga morrer antes de recomecar.
+        Task {
+            try? await Task.sleep(for: .seconds(1))
+            prepare()
+        }
+    }
+
     /// Carrega (ou baixa) o modelo uma unica vez; chamadas concorrentes compartilham a task.
     private func loadContainer() async throws -> ModelContainer {
         if let container { return container }
