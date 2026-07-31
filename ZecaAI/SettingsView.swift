@@ -22,6 +22,7 @@ struct SettingsView: View {
     @AppStorage("asrLanguage") private var language = "auto"
     @EnvironmentObject private var summarizer: Summarizer
     @ObservedObject private var google = GoogleCalendar.shared
+    @ObservedObject private var llm = LocalLLM.shared
 
     private let languages: [(code: String, label: String)] = [
         ("auto", "Detect automatically"),
@@ -83,12 +84,42 @@ struct SettingsView: View {
         }
         Section("Provider") {
             Picker("Provider", selection: Binding(
-                get: { summarizer.provider }, set: { summarizer.provider = $0 })) {
+                get: { summarizer.provider },
+                set: {
+                    summarizer.provider = $0
+                    // Ja dispara o download do modelo ao escolher o Qwen.
+                    if $0 == "mlx" { llm.prepare() }
+                })) {
                 Text("Claude (API)").tag("claude")
+                Text("On-device (Qwen 3, built-in)").tag("mlx")
                 Text("On-device (Apple Intelligence)").tag("local")
             }
             .pickerStyle(.radioGroup)
-            if summarizer.usesLocal {
+            if summarizer.usesMLX {
+                Text("Qwen 3 4B running inside the app (MLX). Nothing to install, nothing leaves your Mac. Requires Apple Silicon.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                switch llm.state {
+                case .ready:
+                    Label("Model downloaded and ready.", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                case .downloading(let fraction):
+                    VStack(alignment: .leading, spacing: 4) {
+                        ProgressView(value: fraction)
+                        Text("Downloading model... \(Int(fraction * 100))% of ~2.4 GB. Summaries stay unavailable until it finishes.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                case .notDownloaded:
+                    HStack {
+                        Text("The model (~2.4 GB) needs to be downloaded once.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Download model") { llm.prepare() }
+                    }
+                }
+            } else if summarizer.usesLocal {
                 Text(Summarizer.localAvailable
                      ? "Runs on Apple's built-in on-device model. Nothing to install, nothing leaves your Mac. Long meetings are summarized in two passes."
                      : "Not available on this Mac. It needs macOS 26 with Apple Intelligence enabled in System Settings.")

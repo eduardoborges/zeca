@@ -7,7 +7,7 @@ import SwiftUI
 @MainActor
 final class Summarizer: ObservableObject {
     @AppStorage("anthropicKey") var apiKey = ""
-    @AppStorage("summaryProvider") var provider = "claude" // "claude" | "local"
+    @AppStorage("summaryProvider") var provider = "claude" // "claude" | "local" | "mlx"
     @AppStorage("summaryLanguage") var summaryLanguage = "auto" // "auto" | codigo ISO
     @AppStorage("claudeModel") var claudeModel = "claude-opus-5"
 
@@ -35,11 +35,20 @@ final class Summarizer: ObservableObject {
     }
     @Published private(set) var isRunning = false
     @Published var error: String?
+    /// Progresso extra (ex.: download do modelo MLX) mostrado no lugar do rotulo padrao.
+    @Published var status: String?
 
     var usesLocal: Bool { provider == "local" }
+    var usesMLX: Bool { provider == "mlx" }
+
+    init() {
+        // Retoma um download interrompido do modelo embarcado ao abrir o app.
+        if usesMLX, LocalLLM.shared.state != .ready { LocalLLM.shared.prepare() }
+    }
 
     /// Nome exibido nos indicadores de progresso.
     var providerName: String {
+        if usesMLX { return LocalLLM.displayName }
         if usesLocal { return "Apple Intelligence (on-device)" }
         let short = Self.claudeModels.first { $0.id == claudeModel }
             .map { $0.label.components(separatedBy: " (")[0] }
@@ -47,7 +56,10 @@ final class Summarizer: ObservableObject {
     }
 
     /// Ha um provedor utilizavel configurado?
-    var isConfigured: Bool { usesLocal || !apiKey.isEmpty }
+    var isConfigured: Bool {
+        if usesMLX { return LocalLLM.shared.state == .ready }
+        return usesLocal || !apiKey.isEmpty
+    }
 
     /// O modelo on-device existe e esta pronto? (macOS 26+ com Apple Intelligence)
     static var localAvailable: Bool {
@@ -162,9 +174,42 @@ final class Summarizer: ObservableObject {
     }
 
     private func route(system: String, user: String, maxTokens: Int) async -> String? {
-        usesLocal
-            ? await completeLocal(system: system, user: user)
-            : await completeClaude(system: system, user: user, maxTokens: maxTokens)
+        if usesMLX { return await completeMLX(system: system, user: user) }
+        if usesLocal { return await completeLocal(system: system, user: user) }
+        return await completeClaude(system: system, user: user, maxTokens: maxTokens)
+    }
+
+    /// LLM embarcado (MLX). Contexto de 32k tokens: transcricoes muito longas
+    /// passam pelas mesmas duas etapas do provider local.
+    private func completeMLX(system: String, user: String) async -> String? {
+        guard LocalLLM.shared.state == .ready else {
+            error = "The Qwen 3 model is still downloading. Follow the progress in Settings > Summary."
+            return nil
+        }
+        LocalLLM.shared.onStatus = { [weak self] in self?.status = $0 }
+        defer { status = nil }
+        do {
+            let chunkLimit = 60_000 // ~15k tokens por parte, folga pros 32k do Qwen3
+            if user.count <= chunkLimit {
+                return try await LocalLLM.shared.generate(system: system, prompt: user)
+            }
+            var partials: [String] = []
+            var start = user.startIndex
+            while start < user.endIndex {
+                let end = user.index(start, offsetBy: chunkLimit, limitedBy: user.endIndex) ?? user.endIndex
+                partials.append(try await LocalLLM.shared.generate(
+                    system: "Rewrite this part of a meeting transcript as detailed notes in reported speech. \(languageInstruction) Keep every point, decision, example and speaker attribution, but describe it in your own words — never copy lines verbatim.",
+                    prompt: String(user[start..<end])))
+                start = end
+            }
+            return try await LocalLLM.shared.generate(
+                system: system,
+                prompt: "These are partial summaries of consecutive parts of one meeting:\n\n" +
+                    partials.joined(separator: "\n\n---\n\n"))
+        } catch {
+            self.error = "On-device model error: \(error.localizedDescription)"
+            return nil
+        }
     }
 
     /// Modelo on-device do Apple Intelligence (FoundationModels). Nada sai da maquina,

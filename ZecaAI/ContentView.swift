@@ -526,7 +526,7 @@ private struct RecordingDetail: View {
     }
 
     private var busyLabel: String {
-        transcriber.status ?? (labeler.isRunning
+        transcriber.status ?? summarizer.status ?? (labeler.isRunning
             ? "Identifying speakers..."
             : generatingNotes
                 ? "Writing notes with \(summarizer.providerName)..."
