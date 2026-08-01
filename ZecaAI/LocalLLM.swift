@@ -188,15 +188,24 @@ final class LocalLLM: ObservableObject {
 
     func generate(system: String, prompt: String) async throws -> String {
         let container = try await loadContainer()
-        let session = ChatSession(container, instructions: system)
         // Qwen3 base "pensa" por padrao e cospe <think>...</think>, gastando
-        // tempo e tokens; /no_think desliga e o strip abaixo cobre o resto.
+        // tempo e tokens; /no_think (no system E no prompt) desliga, e o strip
+        // abaixo cobre o resto. maxTokens limita raciocinio fugitivo.
         let thinkingModel = modelID.contains("Qwen3") && !modelID.contains("Instruct")
+        let session = ChatSession(
+            container,
+            instructions: thinkingModel ? system + " /no_think" : system,
+            generateParameters: .init(maxTokens: 8192))
         var out = try await session.respond(to: thinkingModel ? prompt + " /no_think" : prompt)
         if let closing = out.range(of: "</think>", options: .backwards) {
             out = String(out[closing.upperBound...])
         }
         out = out.replacingOccurrences(of: "<think>", with: "")
-        return out.trimmingCharacters(in: .whitespacesAndNewlines)
+        out = out.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !out.isEmpty else {
+            throw NSError(domain: "ZecaAI", code: 4, userInfo: [NSLocalizedDescriptionKey:
+                "The model returned an empty answer. Small models sometimes spend everything thinking — try a larger model in Settings."])
+        }
+        return out
     }
 }
