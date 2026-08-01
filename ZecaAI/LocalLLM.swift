@@ -188,15 +188,36 @@ final class LocalLLM: ObservableObject {
 
     func generate(system: String, prompt: String) async throws -> String {
         let container = try await loadContainer()
-        // Qwen3 base "pensa" por padrao e cospe <think>...</think>, gastando
-        // tempo e tokens; /no_think (no system E no prompt) desliga, e o strip
-        // abaixo cobre o resto. maxTokens limita raciocinio fugitivo.
-        let thinkingModel = modelID.contains("Qwen3") && !modelID.contains("Instruct")
+        // maxTokens limita raciocinio fugitivo de modelos "thinking" (Qwen3 base).
         let session = ChatSession(
             container,
-            instructions: thinkingModel ? system + " /no_think" : system,
+            instructions: system,
             generateParameters: .init(maxTokens: 8192))
-        var out = try await session.respond(to: thinkingModel ? prompt + " /no_think" : prompt)
+
+        // Streaming: se o modelo pensa (<think>...), o raciocinio aparece ao vivo
+        // no rotulo de progresso em vez de parecer travado.
+        var out = ""
+        var lastStatus = Date.distantPast
+        var wasThinking = false
+        for try await chunk in session.streamResponse(to: prompt) {
+            out += chunk
+            let thinking = out.contains("<think>") && !out.contains("</think>")
+            if thinking {
+                wasThinking = true
+                let now = Date()
+                if now.timeIntervalSince(lastStatus) > 0.3 {
+                    lastStatus = now
+                    let thought = (out.components(separatedBy: "<think>").last ?? "")
+                        .replacingOccurrences(of: "\n", with: " ")
+                    onStatus?("Thinking: …\(String(thought.suffix(70)))")
+                }
+            } else if wasThinking {
+                wasThinking = false
+                onStatus?(nil) // terminou de pensar; volta pro rotulo padrao
+            }
+        }
+        onStatus?(nil)
+
         if let closing = out.range(of: "</think>", options: .backwards) {
             out = String(out[closing.upperBound...])
         }
