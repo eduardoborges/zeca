@@ -7,9 +7,13 @@ import SwiftUI
 @MainActor
 final class Summarizer: ObservableObject {
     @AppStorage("anthropicKey") var apiKey = ""
-    @AppStorage("summaryProvider") var provider = "claude" // "claude" | "local" | "mlx"
+    @AppStorage("summaryProvider") var provider = "claude" // "claude" | "openai" | "local" | "mlx"
     @AppStorage("summaryLanguage") var summaryLanguage = "auto" // "auto" | codigo ISO
     @AppStorage("claudeModel") var claudeModel = "claude-opus-5"
+    // Qualquer servidor compativel com a API da OpenAI (OpenAI, OpenRouter, Groq, Ollama...).
+    @AppStorage("openaiBaseURL") var openaiBaseURL = "https://api.openai.com/v1"
+    @AppStorage("openaiKey") var openaiKey = ""
+    @AppStorage("openaiModel") var openaiModel = "gpt-4o-mini"
 
     static let claudeModels: [(id: String, label: String)] = [
         ("claude-opus-5", "Opus 5 (most capable)"),
@@ -40,6 +44,7 @@ final class Summarizer: ObservableObject {
 
     var usesLocal: Bool { provider == "local" }
     var usesMLX: Bool { provider == "mlx" }
+    var usesOpenAI: Bool { provider == "openai" }
 
     init() {
         // Retoma um download interrompido do modelo embarcado ao abrir o app.
@@ -50,6 +55,7 @@ final class Summarizer: ObservableObject {
     var providerName: String {
         if usesMLX { return LocalLLM.shared.displayName }
         if usesLocal { return "Apple Intelligence (on-device)" }
+        if usesOpenAI { return openaiModel.isEmpty ? "OpenAI-compatible API" : openaiModel }
         let short = Self.claudeModels.first { $0.id == claudeModel }
             .map { $0.label.components(separatedBy: " (")[0] }
         return short.map { "Claude \($0)" } ?? "Claude"
@@ -58,6 +64,7 @@ final class Summarizer: ObservableObject {
     /// Ha um provedor utilizavel configurado?
     var isConfigured: Bool {
         if usesMLX { return LocalLLM.shared.state == .ready }
+        if usesOpenAI { return !openaiBaseURL.isEmpty && !openaiModel.isEmpty }
         return usesLocal || !apiKey.isEmpty
     }
 
@@ -176,7 +183,55 @@ final class Summarizer: ObservableObject {
     private func route(system: String, user: String, maxTokens: Int) async -> String? {
         if usesMLX { return await completeMLX(system: system, user: user) }
         if usesLocal { return await completeLocal(system: system, user: user) }
+        if usesOpenAI { return await completeOpenAI(system: system, user: user, maxTokens: maxTokens) }
         return await completeClaude(system: system, user: user, maxTokens: maxTokens)
+    }
+
+    /// Qualquer endpoint compativel com /chat/completions da OpenAI.
+    /// A chave e opcional (servidores locais como Ollama/LM Studio nao exigem).
+    private func completeOpenAI(system: String, user: String, maxTokens: Int) async -> String? {
+        let base = openaiBaseURL.hasSuffix("/") ? String(openaiBaseURL.dropLast()) : openaiBaseURL
+        guard let url = URL(string: "\(base)/chat/completions") else {
+            error = "Invalid base URL."
+            return nil
+        }
+        let body: [String: Any] = [
+            "model": openaiModel,
+            "max_tokens": maxTokens,
+            "messages": [
+                ["role": "system", "content": system],
+                ["role": "user", "content": user],
+            ],
+        ]
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if !openaiKey.isEmpty {
+            request.setValue("Bearer \(openaiKey)", forHTTPHeaderField: "Authorization")
+        }
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        request.timeoutInterval = 300
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                let message = (json?["error"] as? [String: Any])?["message"] as? String
+                error = message ?? "API error."
+                return nil
+            }
+            guard let choices = json?["choices"] as? [[String: Any]],
+                  let message = choices.first?["message"] as? [String: Any],
+                  let text = message["content"] as? String
+            else {
+                error = "Unexpected API response."
+                return nil
+            }
+            return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            if !(error is CancellationError) { self.error = error.localizedDescription }
+            return nil
+        }
     }
 
     /// LLM embarcado (MLX). Contexto de 32k tokens: transcricoes muito longas

@@ -73,12 +73,23 @@ struct SettingsView: View {
                     if $0 == "mlx" { llm.prepare() }
                 })) {
                 Text("Claude (API)").tag("claude")
+                Text("OpenAI-compatible API").tag("openai")
                 Text("On-device (built-in)").tag("mlx")
                 Text("On-device (Apple Intelligence)").tag("local")
             }
             .pickerStyle(.radioGroup)
 
-            if summarizer.usesMLX {
+            if summarizer.usesOpenAI {
+                TextField("Base URL", text: Binding(
+                    get: { summarizer.openaiBaseURL }, set: { summarizer.openaiBaseURL = $0 }))
+                TextField("Model", text: Binding(
+                    get: { summarizer.openaiModel }, set: { summarizer.openaiModel = $0 }))
+                SecureField("API key (optional for local servers)", text: Binding(
+                    get: { summarizer.openaiKey }, set: { summarizer.openaiKey = $0 }))
+                Text("Works with OpenAI, OpenRouter, Groq, Ollama, LM Studio or any /chat/completions endpoint. E.g. https://api.openai.com/v1 with gpt-4o-mini.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if summarizer.usesMLX {
                 mlxRows
             } else if summarizer.usesLocal {
                 Text(Summarizer.localAvailable
