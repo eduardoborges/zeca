@@ -19,9 +19,11 @@ final class LocalLLM: ObservableObject {
         ("mlx-community/gemma-4-12B-it-4bit", "Gemma 4 12B — highest quality, heavy (6.8 GB)", 6_770_000_000),
         ("mlx-community/gemma-4-e4b-it-4bit", "Gemma 4 E4B — Google's efficient 4B (5.2 GB)", 5_180_000_000),
         ("mlx-community/gemma-4-e2b-it-4bit", "Gemma 4 E2B — efficient and light (3.6 GB)", 3_580_000_000),
+        ("mlx-community/NVIDIA-Nemotron-Nano-9B-v2-4bits", "Nemotron Nano 9B — NVIDIA, fast long context (5.0 GB)", 5_020_000_000),
         ("mlx-community/Qwen3-8B-4bit", "Qwen 3 8B — popular, shows its thinking (4.6 GB)", 4_620_000_000),
         ("mlx-community/Llama-3.1-8B-Instruct-4bit", "Llama 3.1 8B — the classic all-rounder (4.5 GB)", 4_530_000_000),
         ("mlx-community/Llama-3.2-3B-Instruct-4bit", "Llama 3.2 3B — light and capable (1.8 GB)", 1_820_000_000),
+        ("mlx-community/NVIDIA-Nemotron-3-Nano-4B-4bit", "Nemotron 3 Nano 4B — NVIDIA compact (2.3 GB)", 2_250_000_000),
         ("mlx-community/Qwen3-1.7B-4bit", "Qwen 3 1.7B — smallest download (1.0 GB)", 980_000_000),
     ]
 
