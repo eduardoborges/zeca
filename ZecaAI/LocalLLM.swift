@@ -203,36 +203,19 @@ final class LocalLLM: ObservableObject {
 
     func generate(system: String, prompt: String) async throws -> String {
         let container = try await loadContainer()
-        // maxTokens limita raciocinio fugitivo de modelos "thinking" (Qwen3 base).
+        // enable_thinking=false vai direto pro chat template (Jinja): o Qwen3/3.5
+        // fecha o bloco <think> vazio no proprio prompt em vez de raciocinar antes
+        // de responder — o que multiplicava o tempo de um resumo por varias vezes.
+        // maxTokens segura modelo que ignore a flag.
         let session = ChatSession(
             container,
             instructions: system,
-            generateParameters: .init(maxTokens: 8192))
+            generateParameters: .init(maxTokens: 8192),
+            additionalContext: ["enable_thinking": false])
 
-        // Streaming: se o modelo pensa (<think>...), o raciocinio aparece ao vivo
-        // no rotulo de progresso em vez de parecer travado.
-        var out = ""
-        var lastStatus = Date.distantPast
-        var wasThinking = false
-        for try await chunk in session.streamResponse(to: prompt) {
-            out += chunk
-            let thinking = out.contains("<think>") && !out.contains("</think>")
-            if thinking {
-                wasThinking = true
-                let now = Date()
-                if now.timeIntervalSince(lastStatus) > 0.3 {
-                    lastStatus = now
-                    let thought = (out.components(separatedBy: "<think>").last ?? "")
-                        .replacingOccurrences(of: "\n", with: " ")
-                    onStatus?("Thinking: …\(String(thought.suffix(70)))")
-                }
-            } else if wasThinking {
-                wasThinking = false
-                onStatus?(nil) // terminou de pensar; volta pro rotulo padrao
-            }
-        }
-        onStatus?(nil)
+        var out = try await session.respond(to: prompt)
 
+        // Rede de seguranca: modelo cujo template nao tem a flag ainda pode pensar.
         if let closing = out.range(of: "</think>", options: .backwards) {
             out = String(out[closing.upperBound...])
         }
@@ -240,7 +223,7 @@ final class LocalLLM: ObservableObject {
         out = out.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !out.isEmpty else {
             throw NSError(domain: "ZecaAI", code: 4, userInfo: [NSLocalizedDescriptionKey:
-                "The model returned an empty answer. Small models sometimes spend everything thinking — try a larger model in Settings."])
+                "The model returned an empty answer. Try a larger model in Settings."])
         }
         return out
     }

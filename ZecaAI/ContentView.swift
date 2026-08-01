@@ -470,7 +470,7 @@ private struct RecordingDetail: View {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.small)
                         Text(busyLabel).font(.callout).foregroundStyle(.secondary)
-                            .lineLimit(1).truncationMode(.head)
+                            .lineLimit(1)
                         if generationTask != nil {
                             Button("Cancel") { cancelGeneration() }
                                 .help("Stops the summary or point by point being generated.")
