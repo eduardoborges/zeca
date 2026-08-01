@@ -89,6 +89,60 @@ resumo mais completo de todos (2.292 caracteres), 11,7 s para uma reunião de
 Para máquina apertada ou pressa, **Qwen 3.5 2B**: 4,4 s, português, e um resumo
 praticamente do mesmo tamanho do 4B com 1,75 GB de download.
 
+## Ponto a ponto — a outra metade da história
+
+Mesma reunião, mesmos 12 modelos, sequencial, com o prompt de ponto a ponto
+**já com a instrução de idioma repetida no fim** (a correção que entrou em `4f033c9`).
+
+| Modelo | Idioma | Tempo | Saída | Seções | Veredito |
+|---|---|---:|---:|---:|---|
+| **Qwen 3.5 4B** | pt | **21,9 s** | 6.913 ch | 8 | ✅ o melhor conjunto |
+| **Qwen 3.5 9B** | pt | 56,1 s | 9.137 ch | 8 | ✅ o mais detalhado |
+| **Nemotron Nano 9B** | pt | 36,9 s | 3.522 ch | 8 | ✅ |
+| **Gemma 4 E4B** | pt | 28,4 s | 7.507 ch | 10 | ✅ |
+| **Llama 3.1 8B** | pt | 30,6 s | 3.411 ch | 10 | ✅ |
+| **Llama 3.2 3B** | pt | **15,3 s** | 3.092 ch | 7 | ✅ |
+| Bonsai 27B | pt | 93,0 s | 6.141 ch | 8 | ⚠️ correto, mas lentíssimo |
+| Qwen 3.5 2B | pt | 48,4 s | 38.380 ch | 58 | ❌ **loop, 55 linhas repetidas** |
+| Bonsai 8B | pt | **217,1 s** | 33.778 ch | 57 | ❌ **loop, 54 repetidas** |
+| Gemma 4 E2B | pt | 71,5 s | 37.297 ch | 86 | ❌ **loop, 21 repetidas** |
+| Nemotron 3 Nano 4B | pt | 99,2 s | 33.982 ch | 2 | ❌ **estourou o teto** |
+| Gemma 4 12B | — | — | — | — | não medido |
+
+**Idioma: 11 de 11 em português.** No benchmark do resumo, com o prompt antigo,
+cinco dos doze responderam em inglês. Aqui, com a instrução repetida depois da
+transcrição, nenhum errou. É a confirmação mais forte de que a correção funciona.
+
+**O prompt vaza o próprio exemplo.** O Nemotron 3 Nano 4B abriu com *"**Maria**
+mencionou que os gatos..."*. A palavra "Maria" aparece **zero vezes** na
+transcrição — é o nome do exemplo dentro do prompt (`e.g. "Maria suggested
+that..."`), que o modelo adotou como participante real. Um caso em onze, mas é
+invenção pura numa seção que o usuário lê como fato.
+
+**Quatro modelos batem no teto de 8.192 tokens** e viram lixo. O pior é o Bonsai
+8B: **3 minutos e 37 segundos** para produzir 33 mil caracteres repetindo a mesma
+frase.
+
+## Isto contradiz o corte anterior
+
+O corte de cinco modelos foi decidido só com o benchmark do **resumo**. Cruzando
+as duas tarefas, ele fica errado nos dois sentidos:
+
+| Modelo | Resumo | Ponto a ponto | Estava |
+|---|---|---|---|
+| Qwen 3.5 2B | ✅ o mais rápido | ❌ loop | **mantido** |
+| Bonsai 8B | ✅ sólido | ❌ loop de 3,6 min | **mantido** |
+| Nemotron 3 Nano 4B | ✅ ok | ❌ estoura o teto | **mantido** |
+| Llama 3.2 3B | ❌ loop | ✅ ok, o mais rápido | **cortado** |
+| Gemma 4 E4B | ⚠️ 672 ch | ✅ 10 seções | **cortado** |
+
+Três dos sete que sobreviveram falham no ponto a ponto, e dois dos cinco cortados
+passam bem nele. Só o **Gemma 4 E2B** falha nas duas tarefas — esse o corte
+acertou sem ressalva.
+
+Um modelo do catálogo precisa servir às duas funções do app. O critério certo é
+passar nas duas, e nenhuma das duas medições sozinha basta para decidir.
+
 ## Corte aplicado no catálogo
 
 Cinco modelos saíram da lista de recomendados depois desta medição:
