@@ -1,12 +1,9 @@
 import FluidAudio
 import Foundation
 
-/// Idioma configurado ("auto" = detectar). Codigos ISO ("pt", "en"...).
+/// A transcricao sempre detecta o idioma falado; nao ha configuracao.
 enum LanguageSetting {
-    static var code: String? {
-        let raw = UserDefaults.standard.string(forKey: "asrLanguage") ?? "auto"
-        return raw == "auto" ? nil : raw
-    }
+    static var code: String? { nil }
 }
 
 enum Speaker: String, Codable {

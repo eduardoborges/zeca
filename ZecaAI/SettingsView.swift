@@ -2,45 +2,18 @@ import SwiftUI
 
 /// Configuracoes (menu Zeca AI > Settings ou Cmd+,), tudo num form unico por secoes.
 struct SettingsView: View {
-    @AppStorage("asrLanguage") private var language = "auto"
     @EnvironmentObject private var summarizer: Summarizer
     @ObservedObject private var google = GoogleCalendar.shared
     @ObservedObject private var llm = LocalLLM.shared
 
-    private let languages: [(code: String, label: String)] = [
-        ("auto", "Detect automatically"),
-        ("pt", "Portuguese"),
-        ("en", "English"),
-        ("es", "Spanish"),
-        ("fr", "French"),
-        ("de", "German"),
-    ]
-
     var body: some View {
         Form {
-            transcriptionSection
             summaryOutputSection
             providerSection
             calendarSection
         }
         .formStyle(.grouped)
         .frame(width: 680, height: 640)
-    }
-
-    // MARK: - Transcricao
-
-    @ViewBuilder
-    private var transcriptionSection: some View {
-        Section("Transcription") {
-            Picker("Language", selection: $language) {
-                ForEach(languages, id: \.code) { item in
-                    Text(item.label).tag(item.code)
-                }
-            }
-            Text("Applies to live transcription and \"Redo analysis\". \"Detect automatically\" handles mixed-language meetings.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
     }
 
     // MARK: - Saida do resumo
