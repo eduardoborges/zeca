@@ -89,6 +89,25 @@ resumo mais completo de todos (2.292 caracteres), 11,7 s para uma reunião de
 Para máquina apertada ou pressa, **Qwen 3.5 2B**: 4,4 s, português, e um resumo
 praticamente do mesmo tamanho do 4B com 1,75 GB de download.
 
+## Corte aplicado no catálogo
+
+Cinco modelos saíram da lista de recomendados depois desta medição:
+
+| Removido | Motivo |
+|---|---|
+| Llama 3.2 3B | entra em loop **e** responde em inglês |
+| Gemma 4 E2B | entra em loop numa reunião de 36 minutos |
+| Gemma 4 E4B | 672 caracteres de resumo, em inglês, custando 5,2 GB |
+| Llama 3.1 8B | perde para o Bonsai 8B, que custa metade e responde em português |
+| Bonsai 27B | o mais lento de todos, em inglês, 8,5 GB |
+
+Quem já tinha um deles selecionado continua usando — o picker das configurações
+mantém o modelo atual visível mesmo fora do catálogo.
+
+Ficaram sete. **Qwen 3.5 9B** segue na lista apesar de derrapar para o inglês:
+esta medição comparou tamanho de saída, não correção do conteúdo, e um resumo
+menor pode ser mais fiel. **Gemma 4 12B** segue por não ter sido medido.
+
 ## Limitações desta medição
 
 Quatro coisas para não confiar demais nos números:

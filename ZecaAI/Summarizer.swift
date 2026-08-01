@@ -117,9 +117,9 @@ final class Summarizer: ObservableObject {
             One paragraph (3-5 sentences) with the essence of the meeting: what it was about, the key facts and how it ended.
 
             **Next steps**
-            Grouped by person: the person's name in bold (**Name**) on its own line, then one bullet (-) per action that person committed to or was assigned. Only include real commitments from the conversation. Omit the whole section if there are none.
+            One bullet (-) per action someone committed to or was assigned. The transcript only identifies speakers as "You" and "Others", so you usually do not know who is who: start a bullet with a person's name in bold only when the transcript itself makes clear that person took the action on. When the owner is not clear, write the action without a name. Never list a person who has no action. Omit the whole section if there are no real commitments.
 
-            Section titles in bold with **, never use # or Markdown headers. Stay faithful to the transcript, do not invent.
+            Section titles in bold with **, never use # or Markdown headers. Stay faithful to the transcript, do not invent. Never repeat a bullet you have already written.
             """,
             maxTokens: 2048)
     }
@@ -182,7 +182,12 @@ final class Summarizer: ObservableObject {
 
     private func complete(turns: [Turn], system: String, maxTokens: Int) async -> String? {
         let transcript = turns.map { "[\($0.speaker.label)] \($0.text)" }.joined(separator: "\n")
-        let user = "Meeting transcript (\"You\" = microphone, \"Others\" = system audio):\n\n\(transcript)"
+        // A instrucao de idioma volta no fim: entre ela no system e a resposta ha uma
+        // transcricao inteira, e modelo pequeno segue o idioma do que leu por ultimo.
+        // Medido: o Qwen 3.5 9B respondia em ingles numa reuniao de 36min e passou a
+        // respeitar o portugues so com essa repeticao.
+        let user = "Meeting transcript (\"You\" = microphone, \"Others\" = system audio):"
+            + "\n\n\(transcript)\n\n\(languageInstruction)"
         isRunning = true
         defer { isRunning = false }
         return await route(system: system, user: user, maxTokens: maxTokens)
