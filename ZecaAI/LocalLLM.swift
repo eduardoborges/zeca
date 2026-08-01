@@ -14,11 +14,12 @@ final class LocalLLM: ObservableObject {
 
     /// Modelos recomendados (mlx-community, 4-bit). Tamanhos reais do HF.
     static let models: [(id: String, label: String, bytes: Int64)] = [
-        ("mlx-community/Qwen3-4B-Instruct-2507-4bit", "Qwen 3 4B — best quality, multilingual (2.3 GB)", 2_280_000_000),
-        ("mlx-community/gemma-3-4b-it-4bit", "Gemma 3 4B — great Portuguese, 128k context (3.4 GB)", 3_440_000_000),
+        ("mlx-community/Qwen3-4B-Instruct-2507-4bit", "Qwen 3 4B — best size/quality balance (2.3 GB)", 2_280_000_000),
+        ("mlx-community/gemma-4-12B-it-4bit", "Gemma 4 12B — highest quality, heavy (6.8 GB)", 6_770_000_000),
+        ("mlx-community/gemma-4-e4b-it-4bit", "Gemma 4 E4B — Google's efficient 4B (5.2 GB)", 5_180_000_000),
+        ("mlx-community/gemma-4-e2b-it-4bit", "Gemma 4 E2B — efficient and light (3.6 GB)", 3_580_000_000),
         ("mlx-community/Llama-3.2-3B-Instruct-4bit", "Llama 3.2 3B — light and capable (1.8 GB)", 1_820_000_000),
-        ("mlx-community/Qwen3-1.7B-4bit", "Qwen 3 1.7B — small and fast (1.0 GB)", 980_000_000),
-        ("mlx-community/gemma-3-1b-it-4bit", "Gemma 3 1B — tiny, quick summaries (0.8 GB)", 770_000_000),
+        ("mlx-community/Qwen3-1.7B-4bit", "Qwen 3 1.7B — smallest download (1.0 GB)", 980_000_000),
     ]
 
     @AppStorage("mlxModel") private(set) var modelID = "mlx-community/Qwen3-4B-Instruct-2507-4bit"
