@@ -171,6 +171,10 @@ struct SettingsView: View {
     private var mlxRows: some View {
         Picker("Model", selection: Binding(
             get: { llm.modelID }, set: { llm.selectModel($0) })) {
+            // Modelo que saiu do catalogo mas segue selecionado/baixado.
+            if !LocalLLM.models.contains(where: { $0.id == llm.modelID }) {
+                Text(llm.modelID).tag(llm.modelID)
+            }
             ForEach(LocalLLM.models, id: \.id) { item in
                 Text(item.label).tag(item.id)
             }

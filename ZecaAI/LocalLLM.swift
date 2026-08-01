@@ -14,22 +14,21 @@ final class LocalLLM: ObservableObject {
 
     /// Modelos recomendados (mlx-community, 4-bit). Tamanhos reais do HF.
     static let models: [(id: String, label: String, bytes: Int64)] = [
-        ("mlx-community/Qwen3-4B-Instruct-2507-4bit", "Qwen 3 4B — best size/quality balance (2.3 GB)", 2_280_000_000),
+        ("mlx-community/Qwen3.5-4B-4bit", "Qwen 3.5 4B — newest generation, great balance (3.1 GB)", 3_060_000_000),
         ("mlx-community/Qwen3.5-9B-OptiQ-4bit", "Qwen 3.5 9B — newest generation, high quality (8.2 GB)", 8_220_000_000),
         ("prism-ml/Ternary-Bonsai-27B-mlx-2bit", "Bonsai 27B — big-model quality, ternary 2-bit (8.5 GB)", 8_520_000_000),
         ("mlx-community/gemma-4-12B-it-4bit", "Gemma 4 12B — highest quality, heavy (6.8 GB)", 6_770_000_000),
         ("mlx-community/gemma-4-e4b-it-4bit", "Gemma 4 E4B — Google's efficient 4B (5.2 GB)", 5_180_000_000),
         ("mlx-community/gemma-4-e2b-it-4bit", "Gemma 4 E2B — efficient and light (3.6 GB)", 3_580_000_000),
         ("mlx-community/NVIDIA-Nemotron-Nano-9B-v2-4bits", "Nemotron Nano 9B — NVIDIA, fast long context (5.0 GB)", 5_020_000_000),
-        ("mlx-community/Qwen3-8B-4bit", "Qwen 3 8B — popular, shows its thinking (4.6 GB)", 4_620_000_000),
         ("mlx-community/Llama-3.1-8B-Instruct-4bit", "Llama 3.1 8B — the classic all-rounder (4.5 GB)", 4_530_000_000),
         ("mlx-community/Llama-3.2-3B-Instruct-4bit", "Llama 3.2 3B — light and capable (1.8 GB)", 1_820_000_000),
         ("prism-ml/Ternary-Bonsai-8B-mlx-2bit", "Bonsai 8B — ternary 2-bit, tiny for its class (2.3 GB)", 2_320_000_000),
         ("mlx-community/NVIDIA-Nemotron-3-Nano-4B-4bit", "Nemotron 3 Nano 4B — NVIDIA compact (2.3 GB)", 2_250_000_000),
-        ("mlx-community/Qwen3-1.7B-4bit", "Qwen 3 1.7B — smallest download (1.0 GB)", 980_000_000),
+        ("mlx-community/Qwen3.5-2B-4bit", "Qwen 3.5 2B — smallest download (1.8 GB)", 1_750_000_000),
     ]
 
-    @AppStorage("mlxModel") private(set) var modelID = "mlx-community/Qwen3-4B-Instruct-2507-4bit"
+    @AppStorage("mlxModel") private(set) var modelID = "mlx-community/Qwen3.5-4B-4bit"
 
     /// Nome curto pro UI e rotulos de progresso ("Qwen 3 4B (on-device)").
     var displayName: String {
