@@ -12,20 +12,25 @@ import Tokenizers
 final class LocalLLM: ObservableObject {
     static let shared = LocalLLM()
 
-    /// Modelos recomendados (mlx-community, 4-bit). Tamanhos reais do HF.
+    /// Modelos recomendados (mlx-community, 4-bit). Tamanhos reais do HF; os rotulos
+    /// vem de medicao propria — mesmo prompt de resumo sobre a mesma transcricao de
+    /// 2.9k tokens, temperatura 0. Velocidade so em termos relativos: o numero absoluto
+    /// depende da maquina, a ordem entre os modelos nao. Os que ignoram o idioma
+    /// configurado estao marcados; velocidade sem obedecer o prompt nao serve.
+    /// Em ordem de recomendacao.
     static let models: [(id: String, label: String, bytes: Int64)] = [
-        ("mlx-community/Qwen3.5-4B-4bit", "Qwen 3.5 4B — newest generation, great balance (3.1 GB)", 3_060_000_000),
-        ("mlx-community/Qwen3.5-9B-OptiQ-4bit", "Qwen 3.5 9B — newest generation, high quality (8.2 GB)", 8_220_000_000),
-        ("prism-ml/Ternary-Bonsai-27B-mlx-2bit", "Bonsai 27B — big-model quality, ternary 2-bit (8.5 GB)", 8_520_000_000),
-        ("mlx-community/gemma-4-12B-it-4bit", "Gemma 4 12B — highest quality, heavy (6.8 GB)", 6_770_000_000),
-        ("mlx-community/gemma-4-e4b-it-4bit", "Gemma 4 E4B — Google's efficient 4B (5.2 GB)", 5_180_000_000),
-        ("mlx-community/gemma-4-e2b-it-4bit", "Gemma 4 E2B — efficient and light (3.6 GB)", 3_580_000_000),
-        ("mlx-community/NVIDIA-Nemotron-Nano-9B-v2-4bits", "Nemotron Nano 9B — NVIDIA, fast long context (5.0 GB)", 5_020_000_000),
-        ("mlx-community/Llama-3.1-8B-Instruct-4bit", "Llama 3.1 8B — the classic all-rounder (4.5 GB)", 4_530_000_000),
-        ("mlx-community/Llama-3.2-3B-Instruct-4bit", "Llama 3.2 3B — light and capable (1.8 GB)", 1_820_000_000),
-        ("prism-ml/Ternary-Bonsai-8B-mlx-2bit", "Bonsai 8B — ternary 2-bit, tiny for its class (2.3 GB)", 2_320_000_000),
-        ("mlx-community/NVIDIA-Nemotron-3-Nano-4B-4bit", "Nemotron 3 Nano 4B — NVIDIA compact (2.3 GB)", 2_250_000_000),
-        ("mlx-community/Qwen3.5-2B-4bit", "Qwen 3.5 2B — smallest download (1.8 GB)", 1_750_000_000),
+        ("mlx-community/Qwen3.5-4B-4bit", "Qwen 3.5 4B — recommended: fullest summaries, keeps your language (3.1 GB)", 3_060_000_000),
+        ("mlx-community/Qwen3.5-2B-4bit", "Qwen 3.5 2B — by far the fastest, and keeps your language (1.8 GB)", 1_750_000_000),
+        ("prism-ml/Ternary-Bonsai-8B-mlx-2bit", "Bonsai 8B — solid and compact, keeps your language (2.3 GB)", 2_320_000_000),
+        ("mlx-community/NVIDIA-Nemotron-3-Nano-4B-4bit", "Nemotron 3 Nano 4B — fast, but summaries run short (2.3 GB)", 2_250_000_000),
+        ("mlx-community/NVIDIA-Nemotron-Nano-9B-v2-4bits", "Nemotron Nano 9B — long context, slow on long meetings (5.0 GB)", 5_020_000_000),
+        ("mlx-community/gemma-4-12B-it-4bit", "Gemma 4 12B — Google's largest, also handles images (6.8 GB)", 6_770_000_000),
+        ("mlx-community/Qwen3.5-9B-OptiQ-4bit", "Qwen 3.5 9B — detailed, but drifts to English on long meetings (8.2 GB)", 8_220_000_000),
+        ("mlx-community/Llama-3.1-8B-Instruct-4bit", "Llama 3.1 8B — the classic, but shallow and drifts to English (4.5 GB)", 4_530_000_000),
+        ("prism-ml/Ternary-Bonsai-27B-mlx-2bit", "Bonsai 27B — the slowest by far, and drifts to English (8.5 GB)", 8_520_000_000),
+        ("mlx-community/gemma-4-e4b-it-4bit", "Gemma 4 E4B — very brief summaries, usually in English (5.2 GB)", 5_180_000_000),
+        ("mlx-community/gemma-4-e2b-it-4bit", "Gemma 4 E2B — repeats itself on long meetings, avoid (3.6 GB)", 3_580_000_000),
+        ("mlx-community/Llama-3.2-3B-Instruct-4bit", "Llama 3.2 3B — repeats itself on long meetings, avoid (1.8 GB)", 1_820_000_000),
     ]
 
     @AppStorage("mlxModel") private(set) var modelID = "mlx-community/Qwen3.5-4B-4bit"
