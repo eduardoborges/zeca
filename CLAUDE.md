@@ -50,7 +50,7 @@ is picked up automatically — no pbxproj editing for new sources.
 | `GoogleCalendar.swift` | OAuth PKCE + loopback server, event fetch, `DayEvent` |
 | `Dashboard.swift` | Overview screen: agenda (EventKit + Google merged) and weekly stats |
 | `ContentView.swift` | Sidebar (Overview + grouped recordings), meeting detail cards, new-meeting flow |
-| `SettingsView.swift` | Sidebar-tab settings (Transcription / Summary / Calendar) |
+| `SettingsView.swift` | Single-form settings: summary language, provider (Claude / OpenAI-compatible / MLX / Apple Intelligence), calendar. Transcription always auto-detects the language. |
 | `Theme.swift` | Monochrome palette + Liquid Glass fallback helpers |
 
 Key invariant: live transcription uses **whole utterances** (buffer until ~0.7s of
