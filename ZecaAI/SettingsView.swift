@@ -80,15 +80,34 @@ struct SettingsView: View {
             .pickerStyle(.radioGroup)
 
             if summarizer.usesOpenAI {
-                TextField("Base URL", text: Binding(
-                    get: { summarizer.openaiBaseURL }, set: { summarizer.openaiBaseURL = $0 }))
-                TextField("Model", text: Binding(
-                    get: { summarizer.openaiModel }, set: { summarizer.openaiModel = $0 }))
-                SecureField("API key (optional for local servers)", text: Binding(
-                    get: { summarizer.openaiKey }, set: { summarizer.openaiKey = $0 }))
-                Text("Works with OpenAI, OpenRouter, Groq, Ollama, LM Studio or any /chat/completions endpoint. E.g. https://api.openai.com/v1 with gpt-4o-mini.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Toggle("Custom server", isOn: Binding(
+                    get: { summarizer.openaiCustomServer },
+                    set: {
+                        summarizer.openaiCustomServer = $0
+                        // Desligou: volta pros padroes da OpenAI pra nao sobrar
+                        // URL/modelo de outro servidor apontando pro lugar errado.
+                        if !$0 {
+                            summarizer.openaiBaseURL = Summarizer.openaiDefaultURL
+                            summarizer.openaiModel = Summarizer.openaiDefaultModel
+                        }
+                    }))
+                if summarizer.openaiCustomServer {
+                    TextField("Base URL", text: Binding(
+                        get: { summarizer.openaiBaseURL }, set: { summarizer.openaiBaseURL = $0 }))
+                    TextField("Model", text: Binding(
+                        get: { summarizer.openaiModel }, set: { summarizer.openaiModel = $0 }))
+                    SecureField("API key (optional for local servers)", text: Binding(
+                        get: { summarizer.openaiKey }, set: { summarizer.openaiKey = $0 }))
+                    Text("Works with OpenRouter, Groq, Ollama, LM Studio or any /chat/completions endpoint.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    SecureField("OpenAI API key", text: Binding(
+                        get: { summarizer.openaiKey }, set: { summarizer.openaiKey = $0 }))
+                    Text("Uses \(Summarizer.openaiDefaultModel) at api.openai.com. Turn on Custom server for other providers or models.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } else if summarizer.usesMLX {
                 mlxRows
             } else if summarizer.usesLocal {

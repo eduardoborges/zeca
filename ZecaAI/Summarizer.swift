@@ -11,9 +11,12 @@ final class Summarizer: ObservableObject {
     @AppStorage("summaryLanguage") var summaryLanguage = "auto" // "auto" | codigo ISO
     @AppStorage("claudeModel") var claudeModel = "claude-opus-5"
     // Qualquer servidor compativel com a API da OpenAI (OpenAI, OpenRouter, Groq, Ollama...).
-    @AppStorage("openaiBaseURL") var openaiBaseURL = "https://api.openai.com/v1"
+    static let openaiDefaultURL = "https://api.openai.com/v1"
+    static let openaiDefaultModel = "gpt-4o-mini"
+    @AppStorage("openaiCustomServer") var openaiCustomServer = false
+    @AppStorage("openaiBaseURL") var openaiBaseURL = openaiDefaultURL
     @AppStorage("openaiKey") var openaiKey = ""
-    @AppStorage("openaiModel") var openaiModel = "gpt-4o-mini"
+    @AppStorage("openaiModel") var openaiModel = openaiDefaultModel
 
     static let claudeModels: [(id: String, label: String)] = [
         ("claude-opus-5", "Opus 5 (most capable)"),
