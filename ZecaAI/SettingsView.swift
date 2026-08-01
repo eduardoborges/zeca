@@ -38,71 +38,104 @@ struct SettingsView: View {
     @ViewBuilder
     private var providerSection: some View {
         Section("Summary provider") {
-            Picker("Provider", selection: Binding(
-                get: { summarizer.provider },
-                set: {
-                    summarizer.provider = $0
-                    // Ja dispara o download do modelo ao escolher o on-device.
-                    if $0 == "mlx" { llm.prepare() }
-                })) {
-                Text("Claude (API)").tag("claude")
-                Text("OpenAI-compatible API").tag("openai")
-                Text("On-device (built-in)").tag("mlx")
-                Text("On-device (Apple Intelligence)").tag("local")
-            }
-            .pickerStyle(.radioGroup)
+            groupHeader("On-device — nothing leaves your Mac")
+            providerChoice("mlx", "Built-in model (MLX)")
+            providerChoice("local", "Apple Intelligence")
+            groupHeader("Cloud API")
+            providerChoice("claude", "Claude")
+            providerChoice("openai", "OpenAI-compatible")
+        }
+        Section(providerTitle) {
+            providerDetails
+        }
+    }
 
-            if summarizer.usesOpenAI {
-                Toggle("Custom server", isOn: Binding(
-                    get: { summarizer.openaiCustomServer },
-                    set: {
-                        summarizer.openaiCustomServer = $0
-                        // Desligou: volta pros padroes da OpenAI pra nao sobrar
-                        // URL/modelo de outro servidor apontando pro lugar errado.
-                        summarizer.openaiModels = []
-                        if !$0 {
-                            summarizer.openaiBaseURL = Summarizer.openaiDefaultURL
-                            summarizer.openaiModel = Summarizer.openaiDefaultModel
-                        }
-                    }))
-                if summarizer.openaiCustomServer {
-                    TextField("Base URL", text: Binding(
-                        get: { summarizer.openaiBaseURL }, set: { summarizer.openaiBaseURL = $0 }))
-                    SecureField("API key (optional for local servers)", text: Binding(
-                        get: { summarizer.openaiKey }, set: { summarizer.openaiKey = $0 }))
-                    openaiModelRow
-                    Text("Works with OpenRouter, Groq, Ollama, LM Studio or any /chat/completions endpoint.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    SecureField("OpenAI API key", text: Binding(
-                        get: { summarizer.openaiKey }, set: { summarizer.openaiKey = $0 }))
-                    openaiModelRow
-                    Text("Turn on Custom server for other providers (OpenRouter, Groq, Ollama...).")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            } else if summarizer.usesMLX {
-                mlxRows
-            } else if summarizer.usesLocal {
-                Text(Summarizer.localAvailable
-                     ? "Runs on Apple's built-in on-device model. Nothing to install, nothing leaves your Mac. Long meetings are summarized in two passes."
-                     : "Not available on this Mac. It needs macOS 26 with Apple Intelligence enabled in System Settings.")
-                    .font(.caption)
-                    .foregroundStyle(Summarizer.localAvailable ? Color.secondary : .orange)
-            } else {
-                Picker("Model", selection: Binding(
-                    get: { summarizer.claudeModel }, set: { summarizer.claudeModel = $0 })) {
-                    ForEach(Summarizer.claudeModels, id: \.id) { item in
-                        Text(item.label).tag(item.id)
+    private func groupHeader(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .fontWeight(.semibold)
+            .foregroundStyle(.secondary)
+    }
+
+    /// Radio desenhado a mao: um Picker .radioGroup nao pode ser quebrado em grupos.
+    private func providerChoice(_ id: String, _ title: String) -> some View {
+        Button {
+            summarizer.provider = id
+            // Ja dispara o download do modelo ao escolher o on-device.
+            if id == "mlx" { llm.prepare() }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: summarizer.provider == id ? "largecircle.fill.circle" : "circle")
+                    .foregroundStyle(summarizer.provider == id ? Color.accentColor : Color.secondary)
+                Text(title)
+                Spacer()
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var providerTitle: String {
+        switch summarizer.provider {
+        case "mlx": return "Built-in model"
+        case "local": return "Apple Intelligence"
+        case "openai": return "OpenAI-compatible API"
+        default: return "Claude"
+        }
+    }
+
+    @ViewBuilder
+    private var providerDetails: some View {
+        if summarizer.usesOpenAI {
+            Toggle("Custom server", isOn: Binding(
+                get: { summarizer.openaiCustomServer },
+                set: {
+                    summarizer.openaiCustomServer = $0
+                    // Desligou: volta pros padroes da OpenAI pra nao sobrar
+                    // URL/modelo de outro servidor apontando pro lugar errado.
+                    summarizer.openaiModels = []
+                    if !$0 {
+                        summarizer.openaiBaseURL = Summarizer.openaiDefaultURL
+                        summarizer.openaiModel = Summarizer.openaiDefaultModel
                     }
-                }
-                SecureField("Anthropic API key", text: Binding(
-                    get: { summarizer.apiKey }, set: { summarizer.apiKey = $0 }))
-                Text("Used only for summaries. Stored on your Mac.")
+                }))
+            if summarizer.openaiCustomServer {
+                TextField("Base URL", text: Binding(
+                    get: { summarizer.openaiBaseURL }, set: { summarizer.openaiBaseURL = $0 }))
+                SecureField("API key (optional for local servers)", text: Binding(
+                    get: { summarizer.openaiKey }, set: { summarizer.openaiKey = $0 }))
+                openaiModelRow
+                Text("Works with OpenRouter, Groq, Ollama, LM Studio or any /chat/completions endpoint.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                SecureField("OpenAI API key", text: Binding(
+                    get: { summarizer.openaiKey }, set: { summarizer.openaiKey = $0 }))
+                openaiModelRow
+                Text("Turn on Custom server for other providers (OpenRouter, Groq, Ollama...).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        } else if summarizer.usesMLX {
+            mlxRows
+        } else if summarizer.usesLocal {
+            Text(Summarizer.localAvailable
+                 ? "Runs on Apple's built-in on-device model. Nothing to install, nothing leaves your Mac. Long meetings are summarized in two passes."
+                 : "Not available on this Mac. It needs macOS 26 with Apple Intelligence enabled in System Settings.")
+                .font(.caption)
+                .foregroundStyle(Summarizer.localAvailable ? Color.secondary : .orange)
+        } else {
+            Picker("Model", selection: Binding(
+                get: { summarizer.claudeModel }, set: { summarizer.claudeModel = $0 })) {
+                ForEach(Summarizer.claudeModels, id: \.id) { item in
+                    Text(item.label).tag(item.id)
+                }
+            }
+            SecureField("Anthropic API key", text: Binding(
+                get: { summarizer.apiKey }, set: { summarizer.apiKey = $0 }))
+            Text("Used only for summaries. Stored on your Mac.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 

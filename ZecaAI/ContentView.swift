@@ -292,6 +292,7 @@ private struct RecordingDetail: View {
     @State private var notes: String?
     @State private var generatingNotes = false
     @State private var generatingSummary = false
+    @State private var generatingTitle = false
     @StateObject private var player = PlayerModel()
     @State private var playerSource = "meeting" // "meeting" | "you" | "others"
     /// Task da geracao em andamento (resumo/ponto a ponto), cancelavel pelo usuario.
@@ -370,6 +371,7 @@ private struct RecordingDetail: View {
         generationTask = nil
         generatingSummary = false
         generatingNotes = false
+        generatingTitle = false
     }
 
     // MARK: - Header
@@ -390,10 +392,29 @@ private struct RecordingDetail: View {
         let url = recording.url.appendingPathComponent("title.txt")
         if title.isEmpty {
             try? FileManager.default.removeItem(at: url)
+            recorder.refresh()
+            generateTitle() // campo esvaziado = pedir um titulo novo ao modelo
         } else {
             try? title.write(to: url, atomically: true, encoding: .utf8)
+            recorder.refresh()
         }
-        recorder.refresh()
+    }
+
+    /// Titulo automatico sob demanda (usuario limpou o campo e deu Enter).
+    private func generateTitle() {
+        guard !turns.isEmpty else { return }
+        summarizer.error = nil
+        generationTask = Task {
+            generatingTitle = true
+            let title = await summarizer.title(for: turns)
+            if let title, !Task.isCancelled {
+                try? title.write(to: recording.url.appendingPathComponent("title.txt"),
+                                 atomically: true, encoding: .utf8)
+                recorder.refresh()
+            }
+            generatingTitle = false
+            generationTask = nil
+        }
     }
 
     private func renameSpeaker() {
@@ -420,11 +441,12 @@ private struct RecordingDetail: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             if editingTitle {
-                TextField("Meeting title", text: $titleDraft)
+                TextField("Meeting title — leave empty to generate one", text: $titleDraft)
                     .textFieldStyle(.plain)
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .onSubmit { saveTitle() }
                     .onExitCommand { editingTitle = false }
+                    .help("Press Enter with the field empty and the model writes a title from the transcript.")
             } else {
                 Text(recording.title)
                     .font(.system(size: 32, weight: .bold, design: .rounded))
@@ -608,9 +630,11 @@ private struct RecordingDetail: View {
     }
 
     private var busyLabel: String {
-        transcriber.status ?? summarizer.status ?? (generatingNotes
+        if let live = transcriber.status ?? summarizer.status { return live }
+        if generatingTitle { return "Generating title with \(summarizer.providerName)..." }
+        return generatingNotes
             ? "Writing notes with \(summarizer.providerName)..."
-            : "Summarizing with \(summarizer.providerName)...")
+            : "Summarizing with \(summarizer.providerName)..."
     }
 
     /// Refaz a transcricao (modelo das Configuracoes) e por cima o resumo e o ponto a ponto.
