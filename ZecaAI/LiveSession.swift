@@ -60,6 +60,7 @@ final class LiveSession: ObservableObject {
     private var pending: [Speaker: [Float]] = [.me: [], .others: []]
     private var baseSample: [Speaker: Int] = [.me: 0, .others: 0]
     private var loop: Task<Void, Never>?
+    private var levelLoop: Task<Void, Never>?
     private var folder: URL?
     private var summarizer: Summarizer?
     private var lastSummaryAt = Date()
@@ -87,9 +88,16 @@ final class LiveSession: ObservableObject {
             }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(100))
-                self.updateLevels()
                 await self.transcribeReadyUtterances(flush: false)
                 await self.summarizeIfDue()
+            }
+        }
+        // Nivel de fala em loop proprio: a transcricao bloqueia o loop principal
+        // por segundos e congelava a barra; assim ela fica em tempo real.
+        levelLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(50))
+                self?.updateLevels()
             }
         }
     }
@@ -98,6 +106,8 @@ final class LiveSession: ObservableObject {
     func stop() async {
         loop?.cancel()
         loop = nil
+        levelLoop?.cancel()
+        levelLoop = nil
         await transcribeReadyUtterances(flush: true)
         micLevel = 0
         systemLevel = 0

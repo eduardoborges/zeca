@@ -270,11 +270,11 @@ private struct LevelBar: View {
             Text(label).font(.caption).foregroundStyle(.secondary)
                 .frame(width: 44, alignment: .trailing)
             // Compressao suave pra fala baixa nao ficar invisivel.
+            // Sem animacao: o nivel e mostrado cru, em tempo real.
             ProgressView(value: min(1, pow(Double(level), 0.5)))
                 .progressViewStyle(.linear)
                 .tint(tint)
                 .frame(width: 140)
-                .animation(.linear(duration: 0.1), value: level)
         }
     }
 }
