@@ -42,6 +42,9 @@ final class Summarizer: ObservableObject {
     }
     @Published private(set) var isRunning = false
     @Published var error: String?
+    /// Modelos listados pelo servidor OpenAI-compativel (GET /models).
+    @Published var openaiModels: [String] = []
+    @Published var fetchingModels = false
     /// Progresso extra (ex.: download do modelo MLX) mostrado no lugar do rotulo padrao.
     @Published var status: String?
 
@@ -188,6 +191,35 @@ final class Summarizer: ObservableObject {
         if usesLocal { return await completeLocal(system: system, user: user) }
         if usesOpenAI { return await completeOpenAI(system: system, user: user, maxTokens: maxTokens) }
         return await completeClaude(system: system, user: user, maxTokens: maxTokens)
+    }
+
+    /// Lista os modelos do servidor configurado (GET /models).
+    func fetchOpenAIModels() async {
+        let base = openaiBaseURL.hasSuffix("/") ? String(openaiBaseURL.dropLast()) : openaiBaseURL
+        guard let url = URL(string: "\(base)/models") else {
+            error = "Invalid base URL."
+            return
+        }
+        fetchingModels = true
+        defer { fetchingModels = false }
+        var request = URLRequest(url: url)
+        if !openaiKey.isEmpty {
+            request.setValue("Bearer \(openaiKey)", forHTTPHeaderField: "Authorization")
+        }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard (response as? HTTPURLResponse)?.statusCode == 200,
+                  let list = json?["data"] as? [[String: Any]] else {
+                let message = (json?["error"] as? [String: Any])?["message"] as? String
+                error = message ?? "Could not list models."
+                return
+            }
+            openaiModels = list.compactMap { $0["id"] as? String }.sorted()
+            error = openaiModels.isEmpty ? "The server returned no models." : nil
+        } catch {
+            if !(error is CancellationError) { self.error = error.localizedDescription }
+        }
     }
 
     /// Qualquer endpoint compativel com /chat/completions da OpenAI.
