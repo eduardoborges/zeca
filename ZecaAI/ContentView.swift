@@ -348,10 +348,13 @@ private struct RecordingDetail: View {
 
     // MARK: - Processamento automatico
 
-    private func autoProcess() async {
+    /// `notify` fica falso quando a transcricao e so a primeira etapa de um
+    /// fluxo maior — um aviso no fim de tudo vale mais que um por etapa.
+    private func autoProcess(notify: Bool = true) async {
         if turns.isEmpty {
             guard let transcribed = await transcriber.run(recording), !transcribed.isEmpty else { return }
             turns = transcribed
+            if notify { Notifier.finished("Transcript ready — \(recording.title)") }
         }
     }
 
@@ -360,7 +363,10 @@ private struct RecordingDetail: View {
         generationTask = Task {
             generatingSummary = true
             let result = await summarizer.run(recording, turns: turns)
-            if !Task.isCancelled { summary = result }
+            if !Task.isCancelled {
+                summary = result
+                if result != nil { Notifier.finished("Summary ready — \(recording.title)") }
+            }
             generatingSummary = false
             generationTask = nil
         }
@@ -646,7 +652,7 @@ private struct RecordingDetail: View {
             summary = nil
             notes = nil
             try? FileManager.default.removeItem(at: recording.transcriptURL)
-            await autoProcess()
+            await autoProcess(notify: false)
             guard !turns.isEmpty, !Task.isCancelled else { generationTask = nil; return }
             generatingSummary = true
             let newSummary = await summarizer.run(recording, turns: turns)
@@ -655,7 +661,10 @@ private struct RecordingDetail: View {
             guard !Task.isCancelled else { generationTask = nil; return }
             generatingNotes = true
             let newNotes = await summarizer.runNotes(recording, turns: turns)
-            if !Task.isCancelled { notes = newNotes }
+            if !Task.isCancelled {
+                notes = newNotes
+                Notifier.finished("Analysis ready — \(recording.title)")
+            }
             generatingNotes = false
             generationTask = nil
         }
@@ -666,7 +675,10 @@ private struct RecordingDetail: View {
         generationTask = Task {
             generatingNotes = true
             let result = await summarizer.runNotes(recording, turns: turns)
-            if !Task.isCancelled { notes = result }
+            if !Task.isCancelled {
+                notes = result
+                if result != nil { Notifier.finished("Point by point ready — \(recording.title)") }
+            }
             generatingNotes = false
             generationTask = nil
         }

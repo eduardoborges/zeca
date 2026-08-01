@@ -201,17 +201,25 @@ final class LocalLLM: ObservableObject {
         }
     }
 
+    /// O Nemotron Nano v2 ignora a variavel do template e decide se pensa procurando
+    /// "/no_think" no proprio system prompt (o template remove o marcador antes de
+    /// renderizar). Os outros nao entendem o marcador, entao ele so vai pra quem precisa.
+    /// ponytail: casa pelo id; se aparecer outro modelo assim, vira campo do catalogo.
+    private static func noThinkMarker(for id: String) -> String {
+        id.contains("Nemotron-Nano") ? "\n/no_think" : ""
+    }
+
     func generate(
         system: String, prompt: String, onPartial: ((String) -> Void)? = nil
     ) async throws -> String {
         let container = try await loadContainer()
-        // enable_thinking=false vai direto pro chat template (Jinja): o Qwen3/3.5
-        // fecha o bloco <think> vazio no proprio prompt em vez de raciocinar antes
-        // de responder — o que multiplicava o tempo de um resumo por varias vezes.
-        // maxTokens segura modelo que ignore a flag.
+        // enable_thinking=false vai direto pro chat template (Jinja): Qwen 3.5,
+        // Bonsai e Nemotron 3 fecham o bloco <think> vazio no proprio prompt em vez
+        // de raciocinar antes de responder. Gemma 4 e Llama ja nao pensam por padrao.
+        // maxTokens segura modelo que ignore tudo isso.
         let session = ChatSession(
             container,
-            instructions: system,
+            instructions: system + Self.noThinkMarker(for: modelID),
             generateParameters: .init(maxTokens: 8192),
             additionalContext: ["enable_thinking": false])
 
