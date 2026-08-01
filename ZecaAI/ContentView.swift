@@ -292,6 +292,8 @@ private struct RecordingDetail: View {
     @State private var notes: String?
     @State private var generatingNotes = false
     @State private var generatingSummary = false
+    @StateObject private var player = PlayerModel()
+    @State private var playerSource = "meeting" // "meeting" | "you" | "others"
     /// Task da geracao em andamento (resumo/ponto a ponto), cancelavel pelo usuario.
     @State private var generationTask: Task<Void, Never>?
     @State private var translatedTurns: [Turn]?
@@ -306,6 +308,7 @@ private struct RecordingDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
+                playerCard
                 summaryCard
                 notesCard
                 transcriptCard
@@ -440,8 +443,6 @@ private struct RecordingDetail: View {
                     Label(Duration.seconds(durationSeconds).formatted(.time(pattern: .minuteSecond)),
                           systemImage: "clock")
                 }
-                AudioChip(url: recording.mic, label: "You")
-                AudioChip(url: recording.system, label: "Others")
                 Spacer()
                 if isBusy {
                     HStack(spacing: 6) {
@@ -491,6 +492,77 @@ private struct RecordingDetail: View {
     }
 
     // MARK: - Cards
+
+    /// Player: faixa combinada (mixada sob demanda) ou cada trilha separada.
+    private var playerCard: some View {
+        Card(title: "Playback", systemImage: "waveform", tint: .primary) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Picker("", selection: $playerSource) {
+                        Text("Meeting").tag("meeting")
+                        Text("You").tag("you")
+                        Text("Others").tag("others")
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 280)
+                    Spacer()
+                    if player.preparing {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("Mixing tracks...").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                HStack(spacing: 12) {
+                    Button { player.toggle() } label: {
+                        Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                            .font(.system(size: 30))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(player.duration == 0)
+                    Text(timeLabel(player.progress))
+                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    Slider(value: Binding(
+                        get: { player.progress },
+                        set: { player.progress = $0 }
+                    ), in: 0...max(player.duration, 0.01)) { editing in
+                        player.scrubbing = editing
+                        if !editing { player.seek(to: player.progress) }
+                    }
+                    .disabled(player.duration == 0)
+                    Text(timeLabel(player.duration))
+                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                }
+                if let error = player.error {
+                    Text(error).font(.caption).foregroundStyle(.red)
+                }
+            }
+        }
+        .task(id: recording.id.path + playerSource) { await loadPlayerSource() }
+        .onDisappear { player.unload() }
+    }
+
+    private func timeLabel(_ seconds: Double) -> String {
+        Duration.seconds(seconds).formatted(.time(pattern: .minuteSecond))
+    }
+
+    private func loadPlayerSource() async {
+        let resume = player.isPlaying
+        switch playerSource {
+        case "you": player.load(recording.mic, autoplay: resume)
+        case "others": player.load(recording.system, autoplay: resume)
+        default:
+            player.preparing = true
+            defer { player.preparing = false }
+            do {
+                let url = try await MeetingAudio.buildCombined(for: recording)
+                player.load(url, autoplay: resume)
+            } catch {
+                player.error = "Could not mix the tracks: \(error.localizedDescription)"
+            }
+        }
+    }
 
     @ViewBuilder
     private var summaryCard: some View {
@@ -820,37 +892,3 @@ private struct TurnRow: View {
     }
 }
 
-/// ponytail: play/pause simples. AVKit nao tem view nativa de audio no macOS,
-/// e VideoPlayer aborta ao instanciar o metadata generico.
-private struct AudioChip: View {
-    let url: URL
-    let label: String
-    @State private var player: AVPlayer?
-
-    private var exists: Bool { FileManager.default.fileExists(atPath: url.path) }
-
-    var body: some View {
-        Button {
-            toggle()
-        } label: {
-            Label(label, systemImage: player == nil ? "play.fill" : "pause.fill")
-        }
-        .zecaGlassButton()
-        .clipShape(Capsule())
-        .disabled(!exists)
-        .onDisappear { player = nil }
-        .onReceive(NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification)) { note in
-            if let item = note.object as? AVPlayerItem, item === player?.currentItem { player = nil }
-        }
-    }
-
-    private func toggle() {
-        if player != nil {
-            player = nil
-        } else {
-            let player = AVPlayer(url: url)
-            player.play()
-            self.player = player
-        }
-    }
-}

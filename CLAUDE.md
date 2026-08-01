@@ -45,6 +45,7 @@ is picked up automatically — no pbxproj editing for new sources.
 | `LiveSession.swift` | Live pipeline: silence-based sentence segmentation (Hex-style whole-utterance decode), levels, per-minute live summary |
 | `Transcriber.swift` | `Turn`/`Speaker` types, offline Parakeet transcription, shared model loader (reentrant) |
 | `LocalLLM.swift` | Embedded on-device LLM (MLX): model catalog, download/delete, generation |
+| `AudioPlayer.swift` | `PlayerModel` (play/seek) + `MeetingAudio` combined-mix builder (meeting.m4a) |
 | `Summarizer.swift` | Claude API + Apple Intelligence providers, summary/notes/title/translation prompts, output-language setting |
 | `GoogleCalendar.swift` | OAuth PKCE + loopback server, event fetch, `DayEvent` |
 | `Dashboard.swift` | Overview screen: agenda (EventKit + Google merged) and weekly stats |

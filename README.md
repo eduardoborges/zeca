@@ -20,6 +20,7 @@ Everything is stored as plain files under `~/Library/Application Support/ZecaAI/
 
 ```
 mic.m4a  system.m4a         audio tracks
+meeting.m4a                 combined mix (created on first play)
 transcript.json             turns with speaker, start/end, text
 summary.md  notes.md        generated documents
 title.txt  offsets.json     metadata
