@@ -91,7 +91,7 @@ final class LocalLLM: ObservableObject {
         Task { _ = try? await loadContainer() }
     }
 
-    /// Apaga os pesos do disco. O download pode ser refeito depois.
+    /// Apaga os pesos do disco (completos ou parciais). Pode baixar de novo depois.
     func deleteModel() {
         cancelLoad()
         try? FileManager.default.removeItem(at: cacheDir)
@@ -100,14 +100,22 @@ final class LocalLLM: ObservableObject {
         state = .notDownloaded
     }
 
-    /// Download travou: cancela, apaga o cache parcial e recomeca do zero.
-    func restartDownload() {
+    /// Pausa o download mantendo os arquivos ja completos no cache.
+    /// (O peso grande em andamento recomeca: o hub nao retoma arquivo pela metade.)
+    func pauseDownload() {
+        cancelLoad()
+        state = .notDownloaded
+    }
+
+    /// Cancela e descarta tudo que foi baixado.
+    func cancelDownload() {
         deleteModel()
-        // Pequena folga pra task antiga morrer antes de recomecar.
-        Task {
-            try? await Task.sleep(for: .seconds(1))
-            prepare()
-        }
+    }
+
+    /// Fracao ja em cache de um download pausado (0 se nao ha nada).
+    var pausedFraction: Double {
+        guard state == .notDownloaded else { return 0 }
+        return min(0.99, Double(bytesOnDisk()) / Double(totalBytes))
     }
 
     private func cancelLoad() {

@@ -169,21 +169,33 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 ProgressView(value: fraction)
                 HStack {
-                    Text("Downloading model... \(Int(fraction * 100))%. Summaries stay unavailable until it finishes. Keep the app open.")
+                    Text("Downloading... \(Int(fraction * 100))%. Keep the app open.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Restart download") { llm.restartDownload() }
-                        .help("Clears the partial download and starts over.")
+                    Button("Pause") { llm.pauseDownload() }
+                        .help("Stops the download. Finished files stay cached.")
+                    Button("Cancel", role: .destructive) { llm.cancelDownload() }
+                        .help("Stops the download and discards everything downloaded so far.")
                 }
             }
         case .notDownloaded:
             HStack {
-                Text("The model needs to be downloaded once.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Download model") { llm.prepare() }
+                if llm.pausedFraction > 0.01 {
+                    Text("Download paused at \(Int(llm.pausedFraction * 100))%.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Resume download") { llm.prepare() }
+                    Button("Discard", role: .destructive) { llm.cancelDownload() }
+                        .help("Deletes the partial download.")
+                } else {
+                    Text("The model needs to be downloaded once.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Download model") { llm.prepare() }
+                }
             }
         }
     }
