@@ -47,6 +47,8 @@ final class Summarizer: ObservableObject {
     @Published var fetchingModels = false
     /// Progresso extra (ex.: download do modelo MLX) mostrado no lugar do rotulo padrao.
     @Published var status: String?
+    /// Texto parcial da geracao em andamento, atualizado token a token.
+    @Published private(set) var streaming: String?
 
     var usesLocal: Bool { provider == "local" }
     var usesMLX: Bool { provider == "mlx" }
@@ -187,10 +189,51 @@ final class Summarizer: ObservableObject {
     }
 
     private func route(system: String, user: String, maxTokens: Int) async -> String? {
+        streaming = nil
+        defer { streaming = nil }
         if usesMLX { return await completeMLX(system: system, user: user) }
         if usesLocal { return await completeLocal(system: system, user: user) }
         if usesOpenAI { return await completeOpenAI(system: system, user: user, maxTokens: maxTokens) }
         return await completeClaude(system: system, user: user, maxTokens: maxTokens)
+    }
+
+    /// Le uma resposta SSE linha a linha, publicando o texto conforme chega.
+    /// `chunk` extrai o pedaco de texto de cada evento (o formato muda por provider).
+    private func streamSSE(
+        _ request: URLRequest, chunk: ([String: Any]) -> String?
+    ) async throws -> String? {
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            // O corpo do erro tambem chega como stream; junta tudo e le a mensagem.
+            var body = ""
+            for try await line in bytes.lines { body += line }
+            let json = try? JSONSerialization.jsonObject(
+                with: Data(body.utf8)) as? [String: Any]
+            error = (json?["error"] as? [String: Any])?["message"] as? String ?? "API error."
+            return nil
+        }
+        var out = ""
+        for try await line in bytes.lines {
+            guard line.hasPrefix("data:") else { continue }
+            let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+            guard payload != "[DONE]",
+                  let json = try? JSONSerialization.jsonObject(
+                    with: Data(payload.utf8)) as? [String: Any]
+            else { continue }
+            if let message = (json["error"] as? [String: Any])?["message"] as? String {
+                error = message
+                return nil
+            }
+            guard let piece = chunk(json), !piece.isEmpty else { continue }
+            out += piece
+            streaming = out
+        }
+        let text = out.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            error = "The model returned an empty answer."
+            return nil
+        }
+        return text
     }
 
     /// Lista os modelos do servidor configurado (GET /models).
@@ -233,6 +276,7 @@ final class Summarizer: ObservableObject {
         let body: [String: Any] = [
             "model": openaiModel,
             "max_tokens": maxTokens,
+            "stream": true,
             "messages": [
                 ["role": "system", "content": system],
                 ["role": "user", "content": user],
@@ -248,21 +292,11 @@ final class Summarizer: ObservableObject {
         request.timeoutInterval = 300
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                let message = (json?["error"] as? [String: Any])?["message"] as? String
-                error = message ?? "API error."
-                return nil
+            return try await streamSSE(request) { json in
+                let choices = json["choices"] as? [[String: Any]]
+                let delta = choices?.first?["delta"] as? [String: Any]
+                return delta?["content"] as? String
             }
-            guard let choices = json?["choices"] as? [[String: Any]],
-                  let message = choices.first?["message"] as? [String: Any],
-                  let text = message["content"] as? String
-            else {
-                error = "Unexpected API response."
-                return nil
-            }
-            return text.trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
             if !(error is CancellationError) { self.error = error.localizedDescription }
             return nil
@@ -279,9 +313,11 @@ final class Summarizer: ObservableObject {
         LocalLLM.shared.onStatus = { [weak self] in self?.status = $0 }
         defer { status = nil }
         do {
+            let live: (String) -> Void = { [weak self] text in self?.streaming = text }
             let chunkLimit = 60_000 // ~15k tokens por parte, folga pros 32k do Qwen3
             if user.count <= chunkLimit {
-                return try await LocalLLM.shared.generate(system: system, prompt: user)
+                return try await LocalLLM.shared.generate(
+                    system: system, prompt: user, onPartial: live)
             }
             var partials: [String] = []
             var start = user.startIndex
@@ -289,13 +325,15 @@ final class Summarizer: ObservableObject {
                 let end = user.index(start, offsetBy: chunkLimit, limitedBy: user.endIndex) ?? user.endIndex
                 partials.append(try await LocalLLM.shared.generate(
                     system: "Rewrite this part of a meeting transcript as detailed notes in reported speech. \(languageInstruction) Keep every point, decision, example and speaker attribution, but describe it in your own words — never copy lines verbatim.",
-                    prompt: String(user[start..<end])))
+                    prompt: String(user[start..<end]),
+                    onPartial: live))
                 start = end
             }
             return try await LocalLLM.shared.generate(
                 system: system,
                 prompt: "These are partial summaries of consecutive parts of one meeting:\n\n" +
-                    partials.joined(separator: "\n\n---\n\n"))
+                    partials.joined(separator: "\n\n---\n\n"),
+                onPartial: live)
         } catch {
             if !(error is CancellationError) {
                 self.error = "On-device model error: \(error.localizedDescription)"
@@ -319,9 +357,11 @@ final class Summarizer: ObservableObject {
         }
         do {
             // ponytail: corte por caracteres (~4 chars/token); refinar se estourar na pratica.
+            let live: (String) -> Void = { [weak self] text in self?.streaming = text }
             let chunkLimit = 10_000
             if user.count <= chunkLimit {
-                return try await Self.respond(instructions: system, prompt: user)
+                return try await Self.respond(
+                    instructions: system, prompt: user, onPartial: live)
             }
             var partials: [String] = []
             var start = user.startIndex
@@ -330,13 +370,15 @@ final class Summarizer: ObservableObject {
                 let chunk = String(user[start..<end])
                 partials.append(try await Self.respond(
                     instructions: "Rewrite this part of a meeting transcript as detailed notes in reported speech. \(languageInstruction) Keep every point, decision, example and speaker attribution, but describe it in your own words — never copy lines verbatim.",
-                    prompt: chunk))
+                    prompt: chunk,
+                    onPartial: live))
                 start = end
             }
             return try await Self.respond(
                 instructions: system,
                 prompt: "These are partial summaries of consecutive parts of one meeting:\n\n" +
-                    partials.joined(separator: "\n\n---\n\n"))
+                    partials.joined(separator: "\n\n---\n\n"),
+                onPartial: live)
         } catch {
             if !(error is CancellationError) { self.error = "Local model error: \(error.localizedDescription)" }
             return nil
@@ -344,10 +386,17 @@ final class Summarizer: ObservableObject {
     }
 
     @available(macOS 26.0, *)
-    private static func respond(instructions: String, prompt: String) async throws -> String {
+    private static func respond(
+        instructions: String, prompt: String, onPartial: ((String) -> Void)? = nil
+    ) async throws -> String {
         let session = LanguageModelSession(instructions: instructions)
-        return try await session.respond(to: prompt).content
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // O stream do FoundationModels entrega snapshots do texto inteiro, nao deltas.
+        var out = ""
+        for try await snapshot in session.streamResponse(to: prompt) {
+            out = snapshot.content
+            onPartial?(out)
+        }
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func completeClaude(system: String, user: String, maxTokens: Int) async -> String? {
@@ -355,6 +404,7 @@ final class Summarizer: ObservableObject {
         let body: [String: Any] = [
             "model": claudeModel,
             "max_tokens": maxTokens,
+            "stream": true,
             "system": system,
             "messages": [["role": "user", "content": user]],
         ]
@@ -368,21 +418,23 @@ final class Summarizer: ObservableObject {
         request.timeoutInterval = 300
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                let message = (json?["error"] as? [String: Any])?["message"] as? String
-                error = message ?? "API error."
-                return nil
+            var refused = false
+            let text = try await streamSSE(request) { json in
+                switch json["type"] as? String {
+                case "content_block_delta":
+                    let delta = json["delta"] as? [String: Any]
+                    // So o texto: um bloco de thinking traz "thinking" e e ignorado.
+                    return delta?["text"] as? String
+                case "message_delta":
+                    let delta = json["delta"] as? [String: Any]
+                    if delta?["stop_reason"] as? String == "refusal" { refused = true }
+                    return nil
+                default:
+                    return nil
+                }
             }
-            if json?["stop_reason"] as? String == "refusal" {
+            if refused {
                 error = "The API refused the request."
-                return nil
-            }
-            guard let content = json?["content"] as? [[String: Any]],
-                  let text = content.first(where: { $0["type"] as? String == "text" })?["text"] as? String
-            else {
-                error = "Unexpected API response."
                 return nil
             }
             return text

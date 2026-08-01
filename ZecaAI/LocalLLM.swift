@@ -201,7 +201,9 @@ final class LocalLLM: ObservableObject {
         }
     }
 
-    func generate(system: String, prompt: String) async throws -> String {
+    func generate(
+        system: String, prompt: String, onPartial: ((String) -> Void)? = nil
+    ) async throws -> String {
         let container = try await loadContainer()
         // enable_thinking=false vai direto pro chat template (Jinja): o Qwen3/3.5
         // fecha o bloco <think> vazio no proprio prompt em vez de raciocinar antes
@@ -213,7 +215,11 @@ final class LocalLLM: ObservableObject {
             generateParameters: .init(maxTokens: 8192),
             additionalContext: ["enable_thinking": false])
 
-        var out = try await session.respond(to: prompt)
+        var out = ""
+        for try await piece in session.streamResponse(to: prompt) {
+            out += piece
+            onPartial?(out)
+        }
 
         // Rede de seguranca: modelo cujo template nao tem a flag ainda pode pensar.
         if let closing = out.range(of: "</think>", options: .backwards) {

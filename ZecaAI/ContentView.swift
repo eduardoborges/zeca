@@ -600,6 +600,7 @@ private struct RecordingDetail: View {
                         ProgressView().controlSize(.small)
                         Text("Summarizing with \(summarizer.providerName)...").foregroundStyle(.secondary)
                     }
+                    StreamingText(text: summarizer.streaming)
                 } else {
                     HStack {
                         Text(turns.isEmpty ? "Available after transcription." : "Generate a summary with \(summarizer.providerName).")
@@ -684,6 +685,7 @@ private struct RecordingDetail: View {
                         ProgressView().controlSize(.small)
                         Text("Writing notes with \(summarizer.providerName)...").foregroundStyle(.secondary)
                     }
+                    StreamingText(text: summarizer.streaming)
                 } else {
                     HStack {
                         Text(turns.isEmpty ? "Available after transcription."
@@ -754,6 +756,29 @@ private struct RecordingDetail: View {
         } accessory: {
             if !turns.isEmpty, transcriber.status == nil {
                 TranslateMenu(busy: translating) { translate(to: $0) }
+            }
+        }
+    }
+}
+
+/// Texto que chega token a token durante a geracao, sempre rolado pro fim.
+/// Altura fixa pra pagina nao ficar pulando enquanto o modelo escreve.
+private struct StreamingText: View {
+    let text: String?
+
+    var body: some View {
+        if let text, !text.isEmpty {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    Text(text)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Color.clear.frame(height: 1).id("tail")
+                }
+                .frame(height: 180)
+                .onChange(of: text) { proxy.scrollTo("tail", anchor: .bottom) }
             }
         }
     }
