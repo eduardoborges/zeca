@@ -58,7 +58,10 @@ final class GoogleCalendar: ObservableObject {
             .replacingOccurrences(of: "=", with: "")
 
         do {
-            let listener = try NWListener(using: .tcp, on: .any)
+            // So loopback: o callback vem do navegador local, nada da rede deve conectar.
+            let params = NWParameters.tcp
+            params.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: .any)
+            let listener = try NWListener(using: params)
             self.listener = listener
             listener.newConnectionHandler = { [weak self] connection in
                 connection.start(queue: .main)

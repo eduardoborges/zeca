@@ -114,8 +114,8 @@ final class Recorder: ObservableObject {
 
     func start(title: String, transcriber: Transcriber, summarizer: Summarizer) async {
         guard !isRecording else { return }
+        let folder = Self.root.appendingPathComponent(Self.folderName())
         do {
-            let folder = Self.root.appendingPathComponent(Self.folderName())
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty {
@@ -189,6 +189,10 @@ final class Recorder: ObservableObject {
             self.stream = nil
             self.sink = nil
             self.mic = nil
+            displayTimer?.invalidate()
+            displayTimer = nil
+            // Sem a pasta orfa: permissao negada nao vira reuniao vazia na sidebar.
+            try? FileManager.default.removeItem(at: folder)
         }
     }
 
@@ -222,9 +226,11 @@ final class Recorder: ObservableObject {
         sink?.close()
         if let folder = currentFolder {
             // Ambos os inicios estao no relogio host, entao a diferenca alinha as trilhas.
+            // Trilha sem nenhum buffer (nil) fica com offset 0 — nunca entra no minimo,
+            // senao o offset da outra viraria o relogio host absoluto.
             let systemStart = sink?.systemStart
             let micStart = mic?.start
-            let base = min(systemStart ?? 0, micStart ?? 0)
+            let base = [systemStart, micStart].compactMap { $0 }.min() ?? 0
             let meta = TrackOffsets(system: (systemStart ?? base) - base, mic: (micStart ?? base) - base)
             if let data = try? JSONEncoder().encode(meta) {
                 try? data.write(to: folder.appendingPathComponent("offsets.json"))
