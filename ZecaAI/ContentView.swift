@@ -6,6 +6,77 @@ enum SidebarItem: Hashable {
     case recording(Recording)
 }
 
+/// Permissoes de captura, checadas ao abrir e ao voltar pro app.
+@MainActor
+final class PermissionCheck: ObservableObject {
+    @Published private(set) var screenMissing = false
+    @Published private(set) var micDenied = false
+    @Published private(set) var micUnasked = false
+
+    var anyMissing: Bool { screenMissing || micDenied || micUnasked }
+
+    func refresh() {
+        screenMissing = !CGPreflightScreenCaptureAccess()
+        let mic = AVCaptureDevice.authorizationStatus(for: .audio)
+        micDenied = mic == .denied || mic == .restricted
+        micUnasked = mic == .notDetermined
+    }
+
+    func requestMic() {
+        AVCaptureDevice.requestAccess(for: .audio) { _ in
+            Task { @MainActor in self.refresh() }
+        }
+    }
+
+    func openScreenSettings() {
+        // Registra o app na lista do painel (o prompt do sistema so aparece uma vez).
+        CGRequestScreenCaptureAccess()
+        NSWorkspace.shared.open(URL(string:
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+    }
+
+    func openMicSettings() {
+        NSWorkspace.shared.open(URL(string:
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!)
+    }
+}
+
+/// Banner no topo quando falta permissao de gravacao de tela ou microfone.
+private struct PermissionBanner: View {
+    @ObservedObject var permissions: PermissionCheck
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text(message)
+                .font(.callout)
+            Spacer()
+            if permissions.micUnasked {
+                Button("Allow microphone") { permissions.requestMic() }
+            }
+            if permissions.micDenied {
+                Button("Microphone settings") { permissions.openMicSettings() }
+            }
+            if permissions.screenMissing {
+                Button("Screen Recording settings") { permissions.openScreenSettings() }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(.orange.opacity(0.12))
+        .overlay(alignment: .bottom) { Divider() }
+    }
+
+    private var message: String {
+        var missing: [String] = []
+        if permissions.screenMissing { missing.append("Screen Recording") }
+        if permissions.micDenied || permissions.micUnasked { missing.append("Microphone") }
+        return "\(missing.joined(separator: " and ")) access is needed to record meetings."
+            + (permissions.screenMissing ? " Granting Screen Recording requires reopening the app." : "")
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject private var recorder: Recorder
     @EnvironmentObject private var transcriber: Transcriber
@@ -16,6 +87,7 @@ struct ContentView: View {
     @State private var pendingDelete: [Recording] = []
     @State private var renaming: Recording?
     @State private var renameText = ""
+    @StateObject private var permissions = PermissionCheck()
     @AppStorage("onboarded") private var onboarded = false
 
     /// Gravacoes selecionadas na sidebar (a selecao e um Set por causa do batch).
@@ -26,6 +98,11 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             main
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if onboarded, permissions.anyMissing {
+                        PermissionBanner(permissions: permissions)
+                    }
+                }
             if !onboarded {
                 OnboardingView()
                     .background(.background)
@@ -34,6 +111,12 @@ struct ContentView: View {
             }
         }
         .animation(.easeOut(duration: 0.4), value: onboarded)
+        .onAppear { permissions.refresh() }
+        // Voltou das Ajustes do Sistema: reconfere na hora.
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification)) { _ in
+            permissions.refresh()
+        }
     }
 
     /// Grupos da sidebar: hoje, ontem, ultimos 7/30 dias, mais antigas.
