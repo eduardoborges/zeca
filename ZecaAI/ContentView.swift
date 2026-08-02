@@ -10,11 +10,18 @@ struct ContentView: View {
     @EnvironmentObject private var recorder: Recorder
     @EnvironmentObject private var transcriber: Transcriber
     @EnvironmentObject private var summarizer: Summarizer
-    @State private var selection: SidebarItem? = .overview
+    @State private var selection: Set<SidebarItem> = [.overview]
     @State private var showingNew = false
     @State private var draftTitle = ""
-    @State private var pendingDelete: Recording?
+    @State private var pendingDelete: [Recording] = []
+    @State private var renaming: Recording?
+    @State private var renameText = ""
     @AppStorage("onboarded") private var onboarded = false
+
+    /// Gravacoes selecionadas na sidebar (a selecao e um Set por causa do batch).
+    private var selectedRecordings: [Recording] {
+        recorder.recordings.filter { selection.contains(.recording($0)) }
+    }
 
     var body: some View {
         ZStack {
@@ -68,8 +75,13 @@ struct ContentView: View {
                             .padding(.vertical, 2)
                             .tag(SidebarItem.recording(recording))
                             .contextMenu {
+                                Button("Rename", systemImage: "pencil") {
+                                    startRename(recording)
+                                }
                                 Button("Delete", systemImage: "trash", role: .destructive) {
-                                    pendingDelete = recording
+                                    // Clique numa linha da selecao age sobre a selecao inteira.
+                                    pendingDelete = selection.contains(.recording(recording))
+                                        ? selectedRecordings : [recording]
                                 }
                             }
                         }
@@ -77,16 +89,34 @@ struct ContentView: View {
                 }
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 230)
+            // Backspace/Delete com a sidebar focada; o alerta confirma antes.
+            .onDeleteCommand {
+                if !selectedRecordings.isEmpty { pendingDelete = selectedRecordings }
+            }
+            // Cmd+Backspace, o atalho do Finder pro mesmo gesto.
+            .onKeyPress(keys: [.delete], phases: .down) { press in
+                guard press.modifiers.contains(.command), !selectedRecordings.isEmpty else { return .ignored }
+                pendingDelete = selectedRecordings
+                return .handled
+            }
+            // Enter renomeia quando ha exatamente uma gravacao selecionada.
+            .onKeyPress(.return) {
+                guard selectedRecordings.count == 1, let recording = selectedRecordings.first else { return .ignored }
+                startRename(recording)
+                return .handled
+            }
         } detail: {
             if showingNew || recorder.isRecording {
                 NewMeetingView(isPresented: $showingNew, initialTitle: draftTitle)
-            } else if case .recording(let recording) = selection {
-                RecordingDetail(recording: recording) { pendingDelete = recording }
+            } else if selectedRecordings.count > 1 {
+                BatchView(recordings: selectedRecordings) { pendingDelete = selectedRecordings }
+            } else if let recording = selectedRecordings.first {
+                RecordingDetail(recording: recording) { pendingDelete = [recording] }
             } else {
                 DashboardView { title, link in
                     if let link { NSWorkspace.shared.open(link) }
                     draftTitle = title
-                    selection = .overview
+                    selection = [.overview]
                     showingNew = true
                     Task { await recorder.start(title: title, transcriber: transcriber, summarizer: summarizer) }
                 }
@@ -95,7 +125,7 @@ struct ContentView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    selection = .overview
+                    selection = [.overview]
                     draftTitle = ""
                     showingNew = true
                 } label: {
@@ -114,20 +144,80 @@ struct ContentView: View {
             Text(recorder.error ?? "")
         }
         .confirmationDialog(
-            "Delete \"\(pendingDelete?.title ?? "")\"?",
-            isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+            pendingDelete.count == 1
+                ? "Delete \"\(pendingDelete.first?.title ?? "")\"?"
+                : "Delete \(pendingDelete.count) meetings?",
+            isPresented: Binding(get: { !pendingDelete.isEmpty }, set: { if !$0 { pendingDelete = [] } }),
             titleVisibility: .visible
         ) {
-            Button("Delete meeting", role: .destructive) {
-                guard let recording = pendingDelete else { return }
-                if selection == .recording(recording) { selection = .overview }
-                recorder.delete(recording)
-                pendingDelete = nil
+            Button(pendingDelete.count == 1 ? "Delete meeting" : "Delete \(pendingDelete.count) meetings",
+                   role: .destructive) {
+                for recording in pendingDelete {
+                    selection.remove(.recording(recording))
+                    recorder.delete(recording)
+                }
+                if selection.isEmpty { selection = [.overview] }
+                pendingDelete = []
             }
-            Button("Cancel", role: .cancel) { pendingDelete = nil }
+            Button("Cancel", role: .cancel) { pendingDelete = [] }
         } message: {
             Text("Audio, transcript and summary will be deleted. No undo.")
         }
+        .alert("Rename meeting", isPresented: Binding(
+            get: { renaming != nil }, set: { if !$0 { renaming = nil } }
+        )) {
+            TextField("Title", text: $renameText)
+            Button("Save") { saveRename() }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        } message: {
+            Text("Leave empty to go back to the date.")
+        }
+    }
+
+    private func startRename(_ recording: Recording) {
+        renameText = recording.customTitle ?? ""
+        renaming = recording
+    }
+
+    private func saveRename() {
+        guard let recording = renaming else { return }
+        renaming = nil
+        let title = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let url = recording.url.appendingPathComponent("title.txt")
+        if title.isEmpty {
+            try? FileManager.default.removeItem(at: url)
+        } else {
+            try? title.write(to: url, atomically: true, encoding: .utf8)
+        }
+        recorder.refresh()
+    }
+}
+
+/// Detalhe quando ha varias gravacoes selecionadas: resumo da selecao e acoes em lote.
+private struct BatchView: View {
+    let recordings: [Recording]
+    let onDelete: () -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "square.stack.3d.up")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+            Text("\(recordings.count) meetings selected")
+                .font(.title2.weight(.semibold))
+            Text(recordings.map(\.title).joined(separator: " · "))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(4)
+                .frame(maxWidth: 480)
+            Button("Delete \(recordings.count) meetings", systemImage: "trash", role: .destructive) {
+                onDelete()
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
