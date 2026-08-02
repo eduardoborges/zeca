@@ -1,183 +1,117 @@
 # Benchmark dos modelos on-device
 
-Medição de todos os modelos do catálogo embarcado (MLX) com uma carga real:
-a gravação **Inovation Hour de 31/07/2026, 36 minutos** — 52.249 caracteres,
-43 turnos, **12.174 tokens de prompt**.
+Como o catálogo de modelos embarcados (MLX) foi escolhido. Medição sobre uma
+gravação real de **36 minutos** — 52 mil caracteres de transcrição, 43 turnos,
+~12 mil tokens de prompt. O conteúdo da reunião é privado e não aparece aqui;
+ficam a metodologia e os resultados.
 
-Cada modelo rodou **sozinho e em sequência**, com o mesmo prompt de resumo do
-app, `temperature = 0`, `max_tokens = 8192` — a mesma configuração que o Zeca usa.
+Cada modelo foi carregado uma vez e rodado **sozinho, em sequência**, nas duas
+tarefas do app — resumo e ponto a ponto — com os prompts de produção,
+`temperature = 0` e os limites reais de token (2.048 e 8.192).
 
-## Resultado
+## Estrutura: tempos e defeitos mecânicos
 
-| Modelo | Idioma | Prompt | Geração | Total | Saída | Veredito |
-|---|---|---:|---:|---:|---:|---|
-| **Qwen 3.5 4B** | português | 2.141 t/s | 85 t/s | **11,7 s** | 2.292 ch | ✅ o mais completo em português |
-| **Qwen 3.5 2B** | português | 5.651 t/s | 185 t/s | **4,4 s** | 1.920 ch | ✅ disparado o mais rápido |
-| **Bonsai 8B** | português | 1.253 t/s | 58 t/s | 17,9 s | 1.850 ch | ✅ sólido |
-| **Nemotron 3 Nano 4B** | português | 1.662 t/s | 102 t/s | 9,9 s | 1.105 ch | ✅ rápido, resumo curto |
-| **Nemotron Nano 9B** | português | 774 t/s | 49 t/s | 24,9 s | 1.842 ch | ✅ lento |
-| Qwen 3.5 9B | **inglês** | 1.258 t/s | 42 t/s | 18,6 s | 1.926 ch | ⚠️ ignorou o idioma |
-| Llama 3.1 8B | **inglês** | 1.195 t/s | 46 t/s | 14,1 s | 906 ch | ⚠️ idioma + resumo raso |
-| Bonsai 27B | **inglês** | 382 t/s | 28 t/s | 45,5 s | 1.998 ch | ⚠️ o mais lento de todos |
-| Gemma 4 E4B | **inglês** | 3.472 t/s | 72 t/s | 5,6 s | 672 ch | ⚠️ saída mínima |
-| Gemma 4 E2B | português | 8.064 t/s | 124 t/s | 68,0 s | 33.349 ch | ❌ **entrou em loop** |
-| Llama 3.2 3B | **inglês** | 2.762 t/s | 70 t/s | 121,5 s | 40.104 ch | ❌ **entrou em loop** |
-| Gemma 4 12B | — | — | — | — | — | não medido (ver limitações) |
-
-`t/s` = tokens por segundo **nesta máquina**. O número absoluto muda com o
-hardware; a ordem entre os modelos, não.
-
-## Os dois que quebram
-
-**Gemma 4 E2B** e **Llama 3.2 3B** não terminam: batem no teto de 8.192 tokens
-repetindo a mesma linha até o limite. O Gemma repetiu um único bullet **400
-vezes**; o Llama repetiu o mesmo bloco de nomes **47 vezes**.
-
-```
-- Discutir a facilidade de uso de ferramentas de captura de conteúdo da web.
-- Discutir a facilidade de uso de ferramentas de captura de conteúdo da web.
-- Discutir a facilidade de uso de ferramentas de captura de conteúdo da web.   (×400)
-```
-
-Não é lentidão: são 68 s e 121 s produzindo lixo. É a pior experiência possível
-no app — o usuário espera dois minutos e recebe um arquivo de 40 mil caracteres
-inútil. Ambos foram para o fim do catálogo com o defeito escrito no rótulo.
-
-Os dois haviam passado no teste com uma reunião curta. **O loop só aparece com
-contexto longo** — que é exatamente o caso de uso real.
-
-## O idioma não é estável
-
-O achado mais importante, e o que invalida a conclusão do teste anterior:
-**a obediência ao idioma configurado muda conforme o tamanho da reunião.**
-
-| Modelo | Reunião curta (3k tokens) | Reunião de 36 min (12k tokens) |
-|---|---|---|
-| Qwen 3.5 9B | português | **inglês** |
-| Bonsai 27B | português | **inglês** |
-| Llama 3.1 8B | português | **inglês** |
-| Nemotron 3 Nano 4B | inglês | **português** |
-| Nemotron Nano 9B | inglês | **português** |
-
-Cinco dos doze trocaram de comportamento entre as duas cargas. Só quatro
-acertaram o português nas duas: **Qwen 3.5 4B, Qwen 3.5 2B, Bonsai 8B** e
-Gemma 4 E2B (que em compensação entra em loop). Consistentes em errar:
-Llama 3.2 3B e Gemma 4 E4B.
-
-A leitura prática: com modelo pequeno rodando local, a instrução de idioma no
-prompt é uma sugestão, não uma garantia. Os rótulos do catálogo refletem o
-comportamento na carga pesada, que é o caso real.
-
-## O que processar 12 mil tokens custa
-
-Numa reunião curta o tempo é quase todo geração. Aqui o **processamento do
-prompt** vira metade do custo:
-
-- Bonsai 27B lê a transcrição a 382 t/s → **32 dos 45 segundos** são só leitura,
-  antes da primeira palavra sair.
-- Qwen 3.5 2B lê a 5.651 t/s → 2 segundos, e ainda escreve o resumo em 2.
-
-Ou seja: a velocidade de geração sozinha engana. O Gemma 4 E4B gera a 72 t/s
-(mediano) mas entrega em 5,6 s porque lê o prompt rápido e escreve pouco.
-
-## Recomendação
-
-**Qwen 3.5 4B** continua o padrão certo: português consistente nas duas cargas,
-resumo mais completo de todos (2.292 caracteres), 11,7 s para uma reunião de
-36 minutos.
-
-Para máquina apertada ou pressa, **Qwen 3.5 2B**: 4,4 s, português, e um resumo
-praticamente do mesmo tamanho do 4B com 1,75 GB de download.
-
-## Ponto a ponto — a outra metade da história
-
-Mesma reunião, mesmos 12 modelos, sequencial, com o prompt de ponto a ponto
-**já com a instrução de idioma repetida no fim** (a correção que entrou em `4f033c9`).
-
-| Modelo | Idioma | Tempo | Saída | Seções | Veredito |
-|---|---|---:|---:|---:|---|
-| **Qwen 3.5 4B** | pt | **21,9 s** | 6.913 ch | 8 | ✅ o melhor conjunto |
-| **Qwen 3.5 9B** | pt | 56,1 s | 9.137 ch | 8 | ✅ o mais detalhado |
-| **Nemotron Nano 9B** | pt | 36,9 s | 3.522 ch | 8 | ✅ |
-| **Gemma 4 E4B** | pt | 28,4 s | 7.507 ch | 10 | ✅ |
-| **Llama 3.1 8B** | pt | 30,6 s | 3.411 ch | 10 | ✅ |
-| **Llama 3.2 3B** | pt | **15,3 s** | 3.092 ch | 7 | ✅ |
-| Bonsai 27B | pt | 93,0 s | 6.141 ch | 8 | ⚠️ correto, mas lentíssimo |
-| Qwen 3.5 2B | pt | 48,4 s | 38.380 ch | 58 | ❌ **loop, 55 linhas repetidas** |
-| Bonsai 8B | pt | **217,1 s** | 33.778 ch | 57 | ❌ **loop, 54 repetidas** |
-| Gemma 4 E2B | pt | 71,5 s | 37.297 ch | 86 | ❌ **loop, 21 repetidas** |
-| Nemotron 3 Nano 4B | pt | 99,2 s | 33.982 ch | 2 | ❌ **estourou o teto** |
-| Gemma 4 12B | — | — | — | — | não medido |
-
-**Idioma: 11 de 11 em português.** No benchmark do resumo, com o prompt antigo,
-cinco dos doze responderam em inglês. Aqui, com a instrução repetida depois da
-transcrição, nenhum errou. É a confirmação mais forte de que a correção funciona.
-
-**O prompt vaza o próprio exemplo.** O Nemotron 3 Nano 4B abriu com *"**Maria**
-mencionou que os gatos..."*. A palavra "Maria" aparece **zero vezes** na
-transcrição — é o nome do exemplo dentro do prompt (`e.g. "Maria suggested
-that..."`), que o modelo adotou como participante real. Um caso em onze, mas é
-invenção pura numa seção que o usuário lê como fato.
-
-**Quatro modelos batem no teto de 8.192 tokens** e viram lixo. O pior é o Bonsai
-8B: **3 minutos e 37 segundos** para produzir 33 mil caracteres repetindo a mesma
-frase.
-
-## Isto contradiz o corte anterior
-
-O corte de cinco modelos foi decidido só com o benchmark do **resumo**. Cruzando
-as duas tarefas, ele fica errado nos dois sentidos:
-
-| Modelo | Resumo | Ponto a ponto | Estava |
+| Modelo | Resumo | Ponto a ponto | |
 |---|---|---|---|
-| Qwen 3.5 2B | ✅ o mais rápido | ❌ loop | **mantido** |
-| Bonsai 8B | ✅ sólido | ❌ loop de 3,6 min | **mantido** |
-| Nemotron 3 Nano 4B | ✅ ok | ❌ estoura o teto | **mantido** |
-| Llama 3.2 3B | ❌ loop | ✅ ok, o mais rápido | **cortado** |
-| Gemma 4 E4B | ⚠️ 672 ch | ✅ 10 seções | **cortado** |
+| Qwen 3.5 2B | 4 s | 10 s | ✅ |
+| Gemma 4 E2B | 4 s | 8 s | ✅ |
+| Llama 3.2 3B | 10 s | 15 s | ✅ |
+| Qwen 3.5 4B | 10 s | 22 s | ✅ |
+| Gemma 4 E4B | 6 s | 29 s | ✅ |
+| Llama 3.1 8B | 19 s | 30 s | ✅ |
+| Nemotron Nano 9B | 26 s | 39 s | ✅ |
+| Qwen 3.5 9B | 20 s | 46 s | ✅ |
+| Bonsai 27B | 46 s | 78 s | ✅ |
+| Bonsai 8B | 16 s | 177 s | ❌ estoura o teto repetindo a mesma frase |
+| Nemotron 3 Nano 4B | 11 s | 95 s | ❌ estoura o teto |
+| Gemma 4 12B | — | — | não medido (ver limitações) |
 
-Três dos sete que sobreviveram falham no ponto a ponto, e dois dos cinco cortados
-passam bem nele. Só o **Gemma 4 E2B** falha nas duas tarefas — esse o corte
-acertou sem ressalva.
+Todos os que passam respondem no idioma configurado e nenhum inventa nome de
+participante — resultado dos consertos de prompt abaixo.
 
-Um modelo do catálogo precisa servir às duas funções do app. O critério certo é
-passar nas duas, e nenhuma das duas medições sozinha basta para decidir.
+## Qualidade de conteúdo — leitura das saídas contra a transcrição
 
-## Corte aplicado no catálogo
+Estrutura limpa não significa resumo bom. Cada saída foi lida contra a
+transcrição completa e julgada por fidelidade e cobertura:
 
-Cinco modelos saíram da lista de recomendados depois desta medição:
+| Modelo | Veredito |
+|---|---|
+| **Qwen 3.5 4B** | ⭐ o melhor nas duas tarefas: cobre a reunião inteira, detalhes corretos |
+| **Qwen 3.5 9B** | ⭐ mesmo nível, mais detalhe; um artefato pontual (caracteres de outro alfabeto) |
+| **Gemma 4 E4B** | ⭐ ponto a ponto excelente do início ao fim; resumos curtos |
+| Nemotron Nano 9B | conteúdo fiel, mas quebra o formato pedido (numera seções, adiciona meta-comentário) |
+| Bonsai 27B | cobertura completa, porém repete a mesma frase em várias seções |
+| Gemma 4 E2B | o mais rápido, mas o ponto a ponto **cobre só os primeiros minutos** da reunião |
+| Qwen 3.5 2B | volume igual ao do 4B com conteúdo raso, repetido em círculo |
+| Llama 3.1 8B | vago, sem detalhe concreto, seções duplicadas |
+| Llama 3.2 3B | **fabrica a estrutura da reunião** — narra perguntas e respostas que não aconteceram |
+
+Flagrantes que nenhuma métrica automática pegou:
+
+- Um modelo transformou uma **piada** dita de passagem num compromisso formal do
+  "Next steps".
+- Outro inventou **um entregável com prazo** que ninguém combinou, confundindo a
+  data da reunião seguinte com um deadline.
+- O modelo mais rápido nas métricas entrega um ponto a ponto de 11 seções — todas
+  sobre os primeiros minutos; o resto da reunião não existe no texto.
+- A reunião tinha **um único compromisso real**. Os modelos bons o capturam
+  limpo; os fracos o enterram em listas de tarefas que ninguém assumiu.
+
+## O corte
+
+Ficaram cinco, cada um com um motivo para existir:
+
+| Mantido | Papel |
+|---|---|
+| Qwen 3.5 4B | padrão — o mais fiel |
+| Qwen 3.5 9B | mais detalhe, aceitando esperar |
+| Gemma 4 E4B | o melhor ponto a ponto depois dos Qwen |
+| Nemotron Nano 9B | opção intermediária fiel (defeito só cosmético) |
+| Gemma 4 12B | único multimodal; pendente de medição no app |
 
 | Removido | Motivo |
 |---|---|
-| Llama 3.2 3B | entra em loop **e** responde em inglês |
-| Gemma 4 E2B | entra em loop numa reunião de 36 minutos |
-| Gemma 4 E4B | 672 caracteres de resumo, em inglês, custando 5,2 GB |
-| Llama 3.1 8B | perde para o Bonsai 8B, que custa metade e responde em português |
-| Bonsai 27B | o mais lento de todos, em inglês, 8,5 GB |
+| Llama 3.2 3B | fabrica estrutura de reunião — desqualificante num app de fidelidade |
+| Qwen 3.5 2B | raso e repetitivo nas duas tarefas |
+| Llama 3.1 8B | vago e dominado por opções melhores e menores |
+| Gemma 4 E2B | ignora a maior parte da reunião no ponto a ponto |
+| Bonsai 27B | dominado pelo Qwen 9B: mesmo download, mais lento, qualidade menor |
+| Bonsai 8B | ignora o limite do prompt, 3 minutos de texto repetido |
+| Nemotron 3 Nano 4B | ignora o limite do prompt, estoura o teto |
 
-Quem já tinha um deles selecionado continua usando — o picker das configurações
-mantém o modelo atual visível mesmo fora do catálogo.
+Quem já tinha um modelo removido selecionado continua usando — o picker das
+configurações mantém o modelo atual mesmo fora do catálogo.
 
-Ficaram sete. **Qwen 3.5 9B** segue na lista apesar de derrapar para o inglês:
-esta medição comparou tamanho de saída, não correção do conteúdo, e um resumo
-menor pode ser mais fiel. **Gemma 4 12B** segue por não ter sido medido.
+## Lições que moldaram os prompts
 
-## Limitações desta medição
+O processo derrubou duas suposições e os consertos estão em produção:
 
-Quatro coisas para não confiar demais nos números:
+1. **Listas sem limite fazem modelo pequeno loopar.** O prompt de ponto a ponto
+   dizia "length is not a problem" e o de resumo pedia bullets sem teto; quatro
+   modelos repetiam a mesma linha até estourar o teto de tokens. Um número
+   explícito ("no máximo 8 bullets", "no máximo 12 partes") consertou três dos
+   quatro — os que não consertou saíram do catálogo por defeito próprio. Isolado
+   por ablação, com teto de tokens controlado, para separar causa de sintoma.
+2. **Pedir agrupamento por pessoa força invenção.** A transcrição só rotula
+   `You`/`Others`; exigir "Next steps agrupados por pessoa" fazia os modelos
+   catarem nomes ditos em voz alta e atribuir tarefas a quem não as assumiu — e
+   um exemplo literal com nome fictício dentro do prompt chegou a virar
+   "participante" da reunião. Os prompts agora dizem ao modelo o que ele não
+   sabe e mandam escrever a ação sem nome quando o dono não estiver claro.
+3. **Instrução de idioma no topo se perde.** Com 12 mil tokens de transcrição
+   entre a instrução e a resposta, 5 de 12 modelos respondiam no idioma da
+   reunião em vez do configurado. Repetir a instrução depois da transcrição
+   zerou o problema.
 
-1. **Não é o binário do app.** Rodei via `mlx-lm` 0.31.3 em Python — mesmos
-   kernels MLX e mesmos pesos quantizados que o `mlx-swift-lm` do Zeca, mas não
-   é a mesma pilha. Os tempos devem bater de perto, não exatamente.
-2. **Gemma 4 12B não foi medido.** É a variante multimodal (`gemma4_unified`,
-   com torre de visão e áudio); o `mlx-lm` do Python só implementa a variante de
-   texto e rejeita os pesos de visão. O Swift do app implementa a unificada, e o
-   modelo funciona lá. Não filtrei pesos para forçar um número, porque isso
-   mediria um modelo diferente do que o app carrega.
-3. **Memória não está na tabela.** O `peak_memory` do MLX é marca d'água do
-   processo inteiro, não por modelo: como rodei os 12 em sequência, o valor só
-   sobe e não diz nada sobre cada um. Medir isso direito exige um processo por
-   modelo.
-4. **Uma execução por modelo.** Sem repetição, sem variância. Com
-   `temperature = 0` a saída é determinística, mas o tempo varia com o que mais
-   estiver rodando na máquina.
+## Limitações
+
+1. **Não é o binário do app.** Medição via `mlx-lm` (Python) — mesmos kernels
+   MLX e mesmos pesos que o `mlx-swift-lm` do app, mas não a mesma pilha.
+2. **Gemma 4 12B não foi medido**: é a variante multimodal, que só o runtime
+   Swift do app implementa. Segue no catálogo como único multimodal, pendente
+   de medição dentro do app.
+3. **A avaliação de conteúdo tem um avaliador só** (Claude, lendo as saídas
+   contra a transcrição). É julgamento criterioso, não métrica reprodutível.
+4. **Uma gravação, uma execução por modelo.** Defeitos que só aparecem em outro
+   tipo de reunião não foram capturados — os loops, por exemplo, não existiam
+   numa gravação curta e apareceram na de 36 minutos.

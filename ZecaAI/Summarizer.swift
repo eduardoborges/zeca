@@ -93,12 +93,12 @@ final class Summarizer: ObservableObject {
         guard let text = await complete(
             turns: turns,
             system: """
-            You write a detailed, faithful account of a meeting. \(languageInstruction) Go through the conversation in order and split it into its natural parts. For each part produce:
+            You write a detailed, faithful account of a meeting. \(languageInstruction) Go through the conversation in order and split it into its natural parts — at most 12 parts. For each part produce:
 
             **Short topic title**
-            One full paragraph describing that part of the discussion: what was raised, by whom, the arguments and examples given, the reactions, and how that part ended.
+            One full paragraph describing that part of the discussion: what was raised, the arguments and examples given, the reactions, and how that part ended.
 
-            Describe everything in your own words, as reported speech (e.g. "Maria suggested that...") — NEVER quote lines verbatim from the transcript. Be thorough and keep the detail; length is not a problem. The topic title goes in bold with ** on its own line, followed by the paragraph. No introduction, no conclusion, no bullets, never use # or Markdown headers. Stay faithful to the transcript, do not invent.
+            Describe everything in your own words, as reported speech — never quote lines verbatim from the transcript. The transcript only identifies speakers as "You" and "Others", so name a person only when the transcript itself makes clear who is speaking or being addressed; otherwise write "the speaker", "someone", or no attribution at all. Be thorough and keep the detail; length is not a problem. The topic title goes in bold with ** on its own line, followed by the paragraph. No introduction, no conclusion, no bullets, never use # or Markdown headers. Stay faithful to the transcript, do not invent. Never repeat a sentence or paragraph you have already written.
             """,
             maxTokens: 8192)
         else { return nil }
@@ -117,7 +117,7 @@ final class Summarizer: ObservableObject {
             One paragraph (3-5 sentences) with the essence of the meeting: what it was about, the key facts and how it ended.
 
             **Next steps**
-            One bullet (-) per action someone committed to or was assigned. The transcript only identifies speakers as "You" and "Others", so you usually do not know who is who: start a bullet with a person's name in bold only when the transcript itself makes clear that person took the action on. When the owner is not clear, write the action without a name. Never list a person who has no action. Omit the whole section if there are no real commitments.
+            One bullet (-) per action someone committed to or was assigned, at most 8 bullets in total. The transcript only identifies speakers as "You" and "Others", so you usually do not know who is who: start a bullet with a person's name in bold only when the transcript itself makes clear that person took the action on. When the owner is not clear, write the action without a name. Never list a person who has no action. Omit the whole section if there are no real commitments.
 
             Section titles in bold with **, never use # or Markdown headers. Stay faithful to the transcript, do not invent. Never repeat a bullet you have already written.
             """,
