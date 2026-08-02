@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/eduardoborges/zeca/compare/v1.0.0...v1.1.0) (2026-08-02)
+
+
+### Features
+
+* **ui:** banner when screen-recording or microphone access is missing ([7436e55](https://github.com/eduardoborges/zeca/commit/7436e5591002d1eb444e8c53cf937146771463d0))
+
+
+### Bug Fixes
+
+* **mic:** extract the processed voice channel by hand ([d615f7d](https://github.com/eduardoborges/zeca/commit/d615f7df544c750d0b4a64c61d98bb5de4e25238))
+
 ## [1.0.0](https://github.com/eduardoborges/zeca/compare/v0.1.0...v1.0.0) (2026-08-02)
 
 
