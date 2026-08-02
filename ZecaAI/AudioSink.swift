@@ -100,13 +100,14 @@ final class MicCapture {
         input.voiceProcessingOtherAudioDuckingConfiguration =
             .init(enableAdvancedDucking: false, duckingLevel: .min)
 
-        // Com voice processing o no entrega 4 canais (mics + referencias de eco sem
-        // cancelamento). So o downmix pra mono e limpo; o buffer cru vaza o eco e o
-        // AAC nem aceita 4ch. Tudo (arquivo e transcricao) passa pelo mono.
+        // Com voice processing o no entrega varios canais: o 0 e a voz processada
+        // (AEC aplicado), os demais sao mics crus e referencias de eco. O canal 0
+        // e copiado a mao — AVAudioConverter fazia esse downmix, mas com a topologia
+        // de 9 canais (iPhone via Continuity presente) ele passou a devolver zero
+        // digital sem erro nenhum. Tudo (arquivo e transcricao) passa por esse mono.
         let format = input.outputFormat(forBus: 0)
         guard let mono = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: format.sampleRate,
-                                       channels: 1, interleaved: false),
-              let downmix = AVAudioConverter(from: format, to: mono) else {
+                                       channels: 1, interleaved: false) else {
             throw NSError(domain: "ZecaAI", code: 2,
                           userInfo: [NSLocalizedDescriptionKey: "Unsupported microphone format."])
         }
@@ -119,9 +120,16 @@ final class MicCapture {
         input.installTap(onBus: 0, bufferSize: 4800, format: format) { [weak self] buffer, when in
             guard let self, !self.isPaused else { return }
             if self.start == nil { self.start = AVAudioTime.seconds(forHostTime: when.hostTime) }
-            guard let out = AVAudioPCMBuffer(pcmFormat: mono, frameCapacity: buffer.frameLength) else { return }
+            guard let out = AVAudioPCMBuffer(pcmFormat: mono, frameCapacity: buffer.frameLength),
+                  let src = buffer.floatChannelData, let dst = out.floatChannelData else { return }
+            out.frameLength = buffer.frameLength
+            if buffer.format.isInterleaved {
+                let stride = Int(buffer.format.channelCount)
+                for i in 0..<Int(buffer.frameLength) { dst[0][i] = src[0][i * stride] }
+            } else {
+                memcpy(dst[0], src[0], Int(buffer.frameLength) * MemoryLayout<Float>.size)
+            }
             do {
-                try downmix.convert(to: out, from: buffer)
                 try self.file?.write(from: out)
             } catch {
                 NSLog("ZecaAI: falha escrevendo mic.m4a: %@", error.localizedDescription)
