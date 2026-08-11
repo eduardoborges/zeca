@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/eduardoborges/zeca/compare/v1.1.0...v1.2.0) (2026-08-11)
+
+
+### Features
+
+* **meetings:** create a meeting from a pasted transcript ([fc5a5bd](https://github.com/eduardoborges/zeca/commit/fc5a5bd093ad797ae5808e896727bc6ffefc3fb8))
+
 ## [1.1.0](https://github.com/eduardoborges/zeca/compare/v1.0.0...v1.1.0) (2026-08-02)
 
 
