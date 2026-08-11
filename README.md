@@ -1,6 +1,6 @@
 # Zeca
 
-<img src="site/assets/zeca.svg" width="96" alt="Zeca logo">
+<img src="ZecaAI/Assets.xcassets/AppIcon.appiconset/icon_256.png" width="128" alt="Zeca app icon">
 
 Zeca is a macOS meeting recorder that transcribes and summarizes everything on your Mac. Named after a real dog.
 
