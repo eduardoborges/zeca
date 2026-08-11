@@ -112,6 +112,25 @@ final class Recorder: ObservableObject {
             .sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
     }
 
+    /// Cria uma reuniao a partir de uma transcricao colada (ex.: exportada do Zoom).
+    /// A pasta nasce so com transcript.json (+ title.txt); nunca havera audio nela.
+    func importMeeting(title: String, turns: [Turn]) -> Recording? {
+        let folder = Self.root.appendingPathComponent(Self.folderName())
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try JSONEncoder().encode(turns).write(to: folder.appendingPathComponent("transcript.json"))
+        } catch {
+            self.error = error.localizedDescription
+            return nil
+        }
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            try? trimmed.write(to: folder.appendingPathComponent("title.txt"), atomically: true, encoding: .utf8)
+        }
+        refresh()
+        return Recording(url: folder)
+    }
+
     func start(title: String, transcriber: Transcriber, summarizer: Summarizer) async {
         guard !isRecording else { return }
         let folder = Self.root.appendingPathComponent(Self.folderName())

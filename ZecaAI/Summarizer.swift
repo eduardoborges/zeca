@@ -85,6 +85,9 @@ final class Summarizer: ObservableObject {
     func run(_ recording: Recording, turns: [Turn]) async -> String? {
         guard let text = await summarize(turns) else { return nil }
         try? text.write(to: recording.summaryURL, atomically: true, encoding: .utf8)
+        // Sidecar com o modelo que gerou; o card mostra no rodape.
+        try? providerName.write(to: recording.url.appendingPathComponent("summary.model.txt"),
+                                atomically: true, encoding: .utf8)
         return text
     }
 
@@ -103,6 +106,8 @@ final class Summarizer: ObservableObject {
             maxTokens: 8192)
         else { return nil }
         try? text.write(to: recording.notesURL, atomically: true, encoding: .utf8)
+        try? providerName.write(to: recording.url.appendingPathComponent("notes.model.txt"),
+                                atomically: true, encoding: .utf8)
         return text
     }
 
@@ -181,7 +186,8 @@ final class Summarizer: ObservableObject {
     }
 
     private func complete(turns: [Turn], system: String, maxTokens: Int) async -> String? {
-        let transcript = turns.map { "[\($0.speaker.label)] \($0.text)" }.joined(separator: "\n")
+        // label, nao speaker.label: reuniao importada e renames manuais trazem o nome real.
+        let transcript = turns.map { "[\($0.label)] \($0.text)" }.joined(separator: "\n")
         // A instrucao de idioma volta no fim: entre ela no system e a resposta ha uma
         // transcricao inteira, e modelo pequeno segue o idioma do que leu por ultimo.
         // Medido: o Qwen 3.5 9B respondia em ingles numa reuniao de 36min e passou a

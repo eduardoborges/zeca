@@ -26,6 +26,71 @@ struct Turn: Codable, Identifiable, Hashable {
     var label: String { who ?? speaker.label }
 }
 
+extension Turn {
+    /// Converte texto colado (WebVTT do Zoom ou linhas "Nome: fala") em turnos.
+    /// Todo turno importado e .others com o nome em `who`; nao ha trilha de microfone.
+    /// Sem timestamp na fonte, um relogio sintetico de 1s so garante ordem e ids unicos.
+    static func parse(_ text: String) -> [Turn] {
+        var turns: [Turn] = []
+        var cueStart: TimeInterval?
+        var cueEnd: TimeInterval?
+        var clock: TimeInterval = 0
+
+        // "00:01:23.500", "01:23,500" ou "01:23" -> segundos
+        func seconds(_ stamp: String) -> TimeInterval? {
+            let parts = stamp.replacingOccurrences(of: ",", with: ".")
+                .split(separator: ":").map(String.init)
+            guard (1...3).contains(parts.count) else { return nil }
+            var total: TimeInterval = 0
+            for part in parts {
+                guard let value = Double(part) else { return nil }
+                total = total * 60 + value
+            }
+            return total
+        }
+
+        for raw in text.components(separatedBy: .newlines) {
+            var line = raw.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty || line == "WEBVTT" || Int(line) != nil { continue }
+            if line.contains("-->") {
+                let stamps = line.components(separatedBy: "-->")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                cueStart = stamps.first.flatMap(seconds)
+                cueEnd = stamps.count > 1 ? seconds(stamps[1]) : nil
+                continue
+            }
+            // txt do Zoom: "00:03:12 Nome: fala" (timestamp solto no comeco da linha)
+            if let space = line.firstIndex(of: " "),
+               let stamp = seconds(String(line[..<space]).trimmingCharacters(in: CharacterSet(charactersIn: "[]"))) {
+                cueStart = stamp
+                cueEnd = nil
+                line = String(line[line.index(after: space)...]).trimmingCharacters(in: .whitespaces)
+            }
+            var who: String?
+            if let colon = line.range(of: ": "),
+               line.distance(from: line.startIndex, to: colon.lowerBound) <= 40 {
+                who = String(line[..<colon.lowerBound])
+                line = String(line[colon.upperBound...])
+            }
+            guard !line.isEmpty else { continue }
+            if who == nil, let last = turns.last {
+                // linha sem "Nome:" e continuacao do turno anterior (cue de varias linhas)
+                turns[turns.count - 1] = Turn(speaker: last.speaker, start: last.start,
+                                              end: cueEnd ?? last.end,
+                                              text: last.text + " " + line, who: last.who)
+            } else {
+                let start = cueStart ?? clock
+                turns.append(Turn(speaker: .others, start: start, end: cueEnd ?? start,
+                                  text: line, who: who))
+            }
+            clock = max(clock, cueEnd ?? cueStart ?? clock) + 1
+            cueStart = nil
+            cueEnd = nil
+        }
+        return turns
+    }
+}
+
 @MainActor
 final class Transcriber: ObservableObject {
     @Published private(set) var status: String?
@@ -47,6 +112,13 @@ final class Transcriber: ObservableObject {
                 (recording.mic, Speaker.me, offsets.mic),
                 (recording.system, Speaker.others, offsets.system),
             ].filter { FileManager.default.fileExists(atPath: $0.0.path) }
+
+            // Reuniao importada (sem audio): nada a transcrever, e o transcript
+            // colado nao pode ser sobrescrito por um JSON vazio.
+            guard !tracks.isEmpty else {
+                status = nil
+                return nil
+            }
 
             let manager = try await loadManager()
             let language = LanguageSetting.code.flatMap(Language.init(rawValue:))

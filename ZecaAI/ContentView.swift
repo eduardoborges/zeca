@@ -190,7 +190,9 @@ struct ContentView: View {
             }
         } detail: {
             if showingNew || recorder.isRecording {
-                NewMeetingView(isPresented: $showingNew, initialTitle: draftTitle)
+                NewMeetingView(isPresented: $showingNew, initialTitle: draftTitle) { imported in
+                    selection = [.recording(imported)]
+                }
             } else if selectedRecordings.count > 1 {
                 BatchView(recordings: selectedRecordings) { pendingDelete = selectedRecordings }
             } else if let recording = selectedRecordings.first {
@@ -311,7 +313,11 @@ private struct NewMeetingView: View {
     @EnvironmentObject private var summarizer: Summarizer
     @Binding var isPresented: Bool
     var initialTitle = ""
+    var onImport: (Recording) -> Void = { _ in }
     @State private var title = ""
+    @State private var importing = false
+    @State private var importText = ""
+    @State private var importError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -325,12 +331,24 @@ private struct NewMeetingView: View {
 
             HStack(spacing: 12) {
                 if !recorder.isRecording {
-                    Button("Start", systemImage: "record.circle.fill") {
-                        Task { await recorder.start(title: title, transcriber: transcriber, summarizer: summarizer) }
+                    if importing {
+                        Button("Create meeting", systemImage: "square.and.arrow.down") { importTranscript() }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        Button("Back") {
+                            importing = false
+                            importError = nil
+                        }
+                    } else {
+                        Button("Start", systemImage: "record.circle.fill") {
+                            Task { await recorder.start(title: title, transcriber: transcriber, summarizer: summarizer) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                        Button("Paste transcript", systemImage: "doc.plaintext") { importing = true }
+                            .help("Create the meeting from a transcript you already have (e.g. from Zoom). No audio.")
+                        Button("Cancel") { isPresented = false }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                    Button("Cancel") { isPresented = false }
                 } else {
                     Button(recorder.isPaused ? "Resume" : "Pause",
                            systemImage: recorder.isPaused ? "play.fill" : "pause.fill") {
@@ -351,10 +369,50 @@ private struct NewMeetingView: View {
 
             if recorder.isRecording {
                 LiveRecordingView(live: recorder.live)
+            } else if importing {
+                VStack(alignment: .leading, spacing: 8) {
+                    TextEditor(text: $importText)
+                        .font(.body.monospaced())
+                        .scrollContentBackground(.hidden)
+                        .padding(8)
+                        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+                    if let importError {
+                        Text(importError).font(.caption).foregroundStyle(.red)
+                    }
+                    Text("Paste a transcript: Zoom .vtt content or one \"Name: sentence\" per line.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .padding([.horizontal, .bottom])
             } else {
                 Spacer()
             }
         }
+    }
+
+    private func importTranscript() {
+        let turns = Turn.parse(importText)
+        guard !turns.isEmpty else {
+            importError = "Could not find any speech in the pasted text."
+            return
+        }
+        guard let recording = recorder.importMeeting(title: title, turns: turns) else { return }
+        // Mesmo comportamento do fim da gravacao: sem titulo do usuario, o modelo escreve um.
+        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let summarizer = summarizer
+            let recorder = recorder
+            Task {
+                if let generated = await summarizer.title(for: turns) {
+                    try? generated.write(to: recording.url.appendingPathComponent("title.txt"),
+                                         atomically: true, encoding: .utf8)
+                    recorder.refresh()
+                }
+            }
+        }
+        importText = ""
+        importing = false
+        isPresented = false
+        onImport(recording)
     }
 }
 
@@ -482,7 +540,7 @@ private struct RecordingDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
-                playerCard
+                if hasAudio { playerCard }
                 summaryCard
                 notesCard
                 transcriptCard
@@ -554,6 +612,12 @@ private struct RecordingDetail: View {
     }
 
     // MARK: - Header
+
+    /// Reuniao importada de transcricao nao tem trilha nenhuma: sem player, sem re-transcricao.
+    private var hasAudio: Bool {
+        FileManager.default.fileExists(atPath: recording.mic.path)
+            || FileManager.default.fileExists(atPath: recording.system.path)
+    }
 
     private var speakers: [String] {
         var seen: [String] = []
@@ -657,17 +721,21 @@ private struct RecordingDetail: View {
                     }
                 } else {
                     Menu {
-                        Button("Redo full analysis", systemImage: "wand.and.stars") { redoEverything() }
-                        Divider()
-                        Button("Redo transcript only", systemImage: "text.bubble") { redoTranscription() }
+                        if hasAudio {
+                            Button("Redo full analysis", systemImage: "wand.and.stars") { redoEverything() }
+                            Divider()
+                            Button("Redo transcript only", systemImage: "text.bubble") { redoTranscription() }
+                        }
                         Button("Redo summary only", systemImage: "sparkles") { summarize() }
                             .disabled(turns.isEmpty)
                         Button("Redo point by point only", systemImage: "list.bullet") { generateNotes() }
                             .disabled(turns.isEmpty)
+                        Button("Redo title only", systemImage: "character.cursor.ibeam") { generateTitle() }
+                            .disabled(turns.isEmpty)
                     } label: {
-                        Label("Redo analysis", systemImage: "wand.and.stars")
+                        Label(hasAudio ? "Redo analysis" : "Redo summary", systemImage: "wand.and.stars")
                     } primaryAction: {
-                        redoEverything()
+                        if hasAudio { redoEverything() } else { summarize() }
                     }
                     .zecaGlassButton()
                     .fixedSize()
@@ -998,6 +1066,12 @@ private struct GeneratedTextCard: View {
             Text(LocalizedStringKey(translated ?? text))
                 .textSelection(.enabled)
                 .lineSpacing(3)
+            if let model = try? String(contentsOf: folder.appendingPathComponent("\(kind).model.txt"),
+                                       encoding: .utf8) {
+                Text("Generated by \(model.trimmingCharacters(in: .whitespacesAndNewlines))")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         } accessory: {
             TranslateMenu(busy: busy) { translate(to: $0) }
         }
