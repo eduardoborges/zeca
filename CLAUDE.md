@@ -12,7 +12,10 @@ conversation happens in Portuguese.
 
 ```bash
 # build (BUILD SUCCEEDED is the only check; there are no tests)
-xcodebuild -project ZecaAI.xcodeproj -scheme ZecaAI -configuration Debug build
+# the skip flags approve mlx-swift's build plugin/macros for CLI builds; if metal is
+# missing after an Xcode update: xcodebuild -downloadComponent MetalToolchain
+xcodebuild -project ZecaAI.xcodeproj -scheme ZecaAI -configuration Debug \
+  -skipPackagePluginValidation -skipMacroValidation build
 
 # run the built app
 open ~/Library/Developer/Xcode/DerivedData/ZecaAI-*/Build/Products/Debug/ZecaAI.app
