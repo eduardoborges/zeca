@@ -14,6 +14,9 @@ struct ZecaAIApp: App {
                 .environmentObject(summarizer)
         }
         .defaultSize(width: 900, height: 560)
+        // Duplo clique num .zeca chega como onOpenURL; isto garante que uma
+        // janela exista (ou reuse a atual) pra receber o evento.
+        .handlesExternalEvents(matching: ["*"])
 
         Settings {
             SettingsView()

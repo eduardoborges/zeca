@@ -82,6 +82,7 @@ struct ContentView: View {
     @EnvironmentObject private var transcriber: Transcriber
     @EnvironmentObject private var summarizer: Summarizer
     @State private var selection: Set<SidebarItem> = [.overview]
+    @State private var archivePreview: ZecaPreview?
     @State private var showingNew = false
     @State private var draftTitle = ""
     @State private var pendingDelete: [Recording] = []
@@ -161,6 +162,9 @@ struct ContentView: View {
                                 Button("Rename", systemImage: "pencil") {
                                     startRename(recording)
                                 }
+                                Button("Export…", systemImage: "square.and.arrow.up") {
+                                    exportRecording(recording)
+                                }
                                 Button("Delete", systemImage: "trash", role: .destructive) {
                                     // Clique numa linha da selecao age sobre a selecao inteira.
                                     pendingDelete = selection.contains(.recording(recording))
@@ -208,6 +212,14 @@ struct ContentView: View {
             }
         }
         .toolbar {
+            ToolbarItem {
+                Button {
+                    importArchives()
+                } label: {
+                    Label("Import", systemImage: "square.and.arrow.down")
+                }
+                .help("Import a .zeca meeting")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     selection = [.overview]
@@ -248,6 +260,35 @@ struct ContentView: View {
         } message: {
             Text("Audio, transcript and summary will be deleted. No undo.")
         }
+        // .zeca arrastado pra janela (Finder entrega file URLs).
+        .dropDestination(for: URL.self) { urls, _ in
+            let archives = urls.filter { $0.pathExtension == "zeca" }
+            guard !archives.isEmpty else { return false }
+            openArchives(archives)
+            return true
+        }
+        // .zeca aberto por duplo clique no Finder; um evento por arquivo.
+        .onOpenURL { url in
+            guard url.pathExtension == "zeca" else { return }
+            openArchives([url])
+        }
+        .sheet(item: $archivePreview) { preview in
+            ZecaPreviewSheet(preview: preview) { doImport in
+                archivePreview = nil
+                if doImport {
+                    do {
+                        let url = try MeetingArchive.finishImport(preview)
+                        recorder.refresh()
+                        selection = [.recording(Recording(url: url))]
+                    } catch {
+                        preview.discard()
+                        recorder.error = error.localizedDescription
+                    }
+                } else {
+                    preview.discard()
+                }
+            }
+        }
         .alert("Rename meeting", isPresented: Binding(
             get: { renaming != nil }, set: { if !$0 { renaming = nil } }
         )) {
@@ -275,6 +316,83 @@ struct ContentView: View {
             try? title.write(to: url, atomically: true, encoding: .utf8)
         }
         recorder.refresh()
+    }
+
+    private func exportRecording(_ recording: Recording) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [MeetingArchive.fileType]
+        panel.nameFieldStringValue = recording.title.replacingOccurrences(of: "/", with: "-") + ".zeca"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try MeetingArchive.export(recording, to: url)
+        } catch {
+            recorder.error = error.localizedDescription
+        }
+    }
+
+    private func importArchives() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [MeetingArchive.fileType]
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return }
+        openArchives(panel.urls)
+    }
+
+    /// Um arquivo abre o preview; varios importam direto (um sheet por vez nao da).
+    private func openArchives(_ urls: [URL]) {
+        if urls.count == 1, let url = urls.first {
+            do {
+                // Preview novo por cima de um pendente: joga o antigo fora.
+                archivePreview?.discard()
+                archivePreview = try MeetingArchive.peek(url)
+            } catch {
+                recorder.error = error.localizedDescription
+            }
+            return
+        }
+        var imported: URL?
+        for url in urls {
+            do {
+                imported = try MeetingArchive.importArchive(from: url)
+            } catch {
+                recorder.error = error.localizedDescription
+            }
+        }
+        recorder.refresh()
+        if let imported {
+            selection = [.recording(Recording(url: imported))]
+        }
+    }
+}
+
+/// Visualizacao de um .zeca aberto (duplo clique ou drag): o detalhe completo
+/// da reuniao, igualzinho ao pos-import, com a barra de importar em cima.
+/// O RecordingDetail opera na pasta temporaria; edicoes vao junto no import.
+private struct ZecaPreviewSheet: View {
+    let preview: ZecaPreview
+    let onClose: (_ doImport: Bool) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: "shippingbox")
+                    .foregroundStyle(.secondary)
+                Text("Exported by \(preview.manifest.author) on \(preview.manifest.exportedAt.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Cancel") { onClose(false) }
+                    .keyboardShortcut(.cancelAction)
+                Button("Import meeting") { onClose(true) }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            Divider()
+            RecordingDetail(recording: preview.recording)
+        }
+        .frame(minWidth: 700, idealWidth: 780, minHeight: 540, idealHeight: 640)
     }
 }
 
