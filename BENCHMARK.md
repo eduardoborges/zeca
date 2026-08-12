@@ -1,17 +1,17 @@
-# Benchmark dos modelos on-device
+# On-device model benchmark
 
-Como o catálogo de modelos embarcados (MLX) foi escolhido. Medição sobre uma
-gravação real de **36 minutos** — 52 mil caracteres de transcrição, 43 turnos,
-~12 mil tokens de prompt. O conteúdo da reunião é privado e não aparece aqui;
-ficam a metodologia e os resultados.
+How the embedded (MLX) model catalog was chosen. Measured on a real
+**36-minute** recording: 52k characters of transcript, 43 turns, ~12k prompt
+tokens. The meeting content is private and does not appear here; the
+methodology and results do.
 
-Cada modelo foi carregado uma vez e rodado **sozinho, em sequência**, nas duas
-tarefas do app — resumo e ponto a ponto — com os prompts de produção,
-`temperature = 0` e os limites reais de token (2.048 e 8.192).
+Each model was loaded once and ran **alone, in sequence**, on the app's two
+tasks (summary and point by point) with the production prompts,
+`temperature = 0` and the real token limits (2,048 and 8,192).
 
-## Estrutura: tempos e defeitos mecânicos
+## Structure: timings and mechanical defects
 
-| Modelo | Resumo | Ponto a ponto | |
+| Model | Summary | Point by point | |
 |---|---|---|---|
 | Qwen 3.5 2B | 4 s | 10 s | ✅ |
 | Gemma 4 E2B | 4 s | 8 s | ✅ |
@@ -22,96 +22,99 @@ tarefas do app — resumo e ponto a ponto — com os prompts de produção,
 | Nemotron Nano 9B | 26 s | 39 s | ✅ |
 | Qwen 3.5 9B | 20 s | 46 s | ✅ |
 | Bonsai 27B | 46 s | 78 s | ✅ |
-| Bonsai 8B | 16 s | 177 s | ❌ estoura o teto repetindo a mesma frase |
-| Nemotron 3 Nano 4B | 11 s | 95 s | ❌ estoura o teto |
-| Gemma 4 12B | — | — | não medido (ver limitações) |
+| Bonsai 8B | 16 s | 177 s | ❌ hits the token ceiling repeating the same sentence |
+| Nemotron 3 Nano 4B | 11 s | 95 s | ❌ hits the token ceiling |
+| Gemma 4 12B | n/a | n/a | not measured (see limitations) |
 
-Todos os que passam respondem no idioma configurado e nenhum inventa nome de
-participante — resultado dos consertos de prompt abaixo.
+Every model that passes answers in the configured language and none invents a
+participant name. Both are results of the prompt fixes below.
 
-## Qualidade de conteúdo — leitura das saídas contra a transcrição
+## Content quality: reading the outputs against the transcript
 
-Estrutura limpa não significa resumo bom. Cada saída foi lida contra a
-transcrição completa e julgada por fidelidade e cobertura:
+Clean structure does not mean a good summary. Each output was read against the
+full transcript and judged for faithfulness and coverage:
 
-| Modelo | Veredito |
+| Model | Verdict |
 |---|---|
-| **Qwen 3.5 4B** | ⭐ o melhor nas duas tarefas: cobre a reunião inteira, detalhes corretos |
-| **Qwen 3.5 9B** | ⭐ mesmo nível, mais detalhe; um artefato pontual (caracteres de outro alfabeto) |
-| **Gemma 4 E4B** | ⭐ ponto a ponto excelente do início ao fim; resumos curtos |
-| Nemotron Nano 9B | conteúdo fiel, mas quebra o formato pedido (numera seções, adiciona meta-comentário) |
-| Bonsai 27B | cobertura completa, porém repete a mesma frase em várias seções |
-| Gemma 4 E2B | o mais rápido, mas o ponto a ponto **cobre só os primeiros minutos** da reunião |
-| Qwen 3.5 2B | volume igual ao do 4B com conteúdo raso, repetido em círculo |
-| Llama 3.1 8B | vago, sem detalhe concreto, seções duplicadas |
-| Llama 3.2 3B | **fabrica a estrutura da reunião** — narra perguntas e respostas que não aconteceram |
+| **Qwen 3.5 4B** | ⭐ the best on both tasks: covers the whole meeting, details correct |
+| **Qwen 3.5 9B** | ⭐ same level, more detail; one isolated artifact (characters from another alphabet) |
+| **Gemma 4 E4B** | ⭐ excellent point by point from start to finish; short summaries |
+| Nemotron Nano 9B | faithful content, but breaks the requested format (numbers sections, adds meta commentary) |
+| Bonsai 27B | full coverage, but repeats the same sentence across several sections |
+| Gemma 4 E2B | the fastest, but its point by point **covers only the first minutes** of the meeting |
+| Qwen 3.5 2B | same volume as the 4B with shallow content, repeated in circles |
+| Llama 3.1 8B | vague, no concrete detail, duplicated sections |
+| Llama 3.2 3B | **fabricates the meeting's structure**, narrating questions and answers that never happened |
 
-Flagrantes que nenhuma métrica automática pegou:
+Catches that no automatic metric would flag:
 
-- Um modelo transformou uma **piada** dita de passagem num compromisso formal do
+- One model turned a **joke** made in passing into a formal commitment under
   "Next steps".
-- Outro inventou **um entregável com prazo** que ninguém combinou, confundindo a
-  data da reunião seguinte com um deadline.
-- O modelo mais rápido nas métricas entrega um ponto a ponto de 11 seções — todas
-  sobre os primeiros minutos; o resto da reunião não existe no texto.
-- A reunião tinha **um único compromisso real**. Os modelos bons o capturam
-  limpo; os fracos o enterram em listas de tarefas que ninguém assumiu.
+- Another invented **a deliverable with a deadline** nobody agreed to,
+  mistaking the date of the next meeting for a due date.
+- The model with the fastest numbers delivers an 11-section point by point, all
+  of it about the first minutes; the rest of the meeting does not exist in the
+  text.
+- The meeting had **exactly one real commitment**. The good models capture it
+  cleanly; the weak ones bury it in task lists nobody signed up for.
 
-## O corte
+## The cut
 
-Ficaram cinco, cada um com um motivo para existir:
+Five stayed, each with a reason to exist:
 
-| Mantido | Papel |
+| Kept | Role |
 |---|---|
-| Qwen 3.5 4B | padrão — o mais fiel |
-| Qwen 3.5 9B | mais detalhe, aceitando esperar |
-| Gemma 4 E4B | o melhor ponto a ponto depois dos Qwen |
-| Nemotron Nano 9B | opção intermediária fiel (defeito só cosmético) |
-| Gemma 4 12B | único multimodal; pendente de medição no app |
+| Qwen 3.5 4B | default, the most faithful |
+| Qwen 3.5 9B | more detail if you can wait |
+| Gemma 4 E4B | the best point by point after the Qwens |
+| Nemotron Nano 9B | faithful middle option (defect is only cosmetic) |
+| Gemma 4 12B | the only multimodal one; measurement inside the app still pending |
 
-| Removido | Motivo |
+| Removed | Reason |
 |---|---|
-| Llama 3.2 3B | fabrica estrutura de reunião — desqualificante num app de fidelidade |
-| Qwen 3.5 2B | raso e repetitivo nas duas tarefas |
-| Llama 3.1 8B | vago e dominado por opções melhores e menores |
-| Gemma 4 E2B | ignora a maior parte da reunião no ponto a ponto |
-| Bonsai 27B | dominado pelo Qwen 9B: mesmo download, mais lento, qualidade menor |
-| Bonsai 8B | ignora o limite do prompt, 3 minutos de texto repetido |
-| Nemotron 3 Nano 4B | ignora o limite do prompt, estoura o teto |
+| Llama 3.2 3B | fabricates meeting structure, disqualifying in an app built on faithfulness |
+| Qwen 3.5 2B | shallow and repetitive on both tasks |
+| Llama 3.1 8B | vague and dominated by better, smaller options |
+| Gemma 4 E2B | ignores most of the meeting in the point by point |
+| Bonsai 27B | dominated by Qwen 9B: same download, slower, lower quality |
+| Bonsai 8B | ignores the prompt's limit, 3 minutes of repeated text |
+| Nemotron 3 Nano 4B | ignores the prompt's limit, hits the token ceiling |
 
-Quem já tinha um modelo removido selecionado continua usando — o picker das
-configurações mantém o modelo atual mesmo fora do catálogo.
+Anyone who had a removed model selected keeps using it: the Settings picker
+holds on to the current model even when it is out of the catalog.
 
-## Lições que moldaram os prompts
+## Lessons that shaped the prompts
 
-O processo derrubou duas suposições e os consertos estão em produção:
+The process knocked down two assumptions, and the fixes are in production:
 
-1. **Listas sem limite fazem modelo pequeno loopar.** O prompt de ponto a ponto
-   dizia "length is not a problem" e o de resumo pedia bullets sem teto; quatro
-   modelos repetiam a mesma linha até estourar o teto de tokens. Um número
-   explícito ("no máximo 8 bullets", "no máximo 12 partes") consertou três dos
-   quatro — os que não consertou saíram do catálogo por defeito próprio. Isolado
-   por ablação, com teto de tokens controlado, para separar causa de sintoma.
-2. **Pedir agrupamento por pessoa força invenção.** A transcrição só rotula
-   `You`/`Others`; exigir "Next steps agrupados por pessoa" fazia os modelos
-   catarem nomes ditos em voz alta e atribuir tarefas a quem não as assumiu — e
-   um exemplo literal com nome fictício dentro do prompt chegou a virar
-   "participante" da reunião. Os prompts agora dizem ao modelo o que ele não
-   sabe e mandam escrever a ação sem nome quando o dono não estiver claro.
-3. **Instrução de idioma no topo se perde.** Com 12 mil tokens de transcrição
-   entre a instrução e a resposta, 5 de 12 modelos respondiam no idioma da
-   reunião em vez do configurado. Repetir a instrução depois da transcrição
-   zerou o problema.
+1. **Unbounded lists make small models loop.** The point by point prompt said
+   "length is not a problem" and the summary prompt asked for bullets with no
+   cap; four models repeated the same line until they hit the token ceiling. An
+   explicit number ("at most 8 bullets", "at most 12 parts") fixed three of the
+   four; the ones it did not fix left the catalog for defects of their own.
+   Isolated by ablation, with the token ceiling held constant, to separate
+   cause from symptom.
+2. **Asking for grouping by person forces invention.** The transcript only
+   labels `You`/`Others`; demanding "Next steps grouped by person" made models
+   fish for names said out loud and assign tasks to people who never took
+   them. A literal example with a fictional name inside the prompt even became
+   a "participant" of the meeting. The prompts now tell the model what it does
+   not know and instruct it to write the action without a name when the owner
+   is unclear.
+3. **A language instruction at the top gets lost.** With 12k tokens of
+   transcript between the instruction and the answer, 5 of 12 models replied
+   in the meeting's language instead of the configured one. Repeating the
+   instruction after the transcript zeroed the problem.
 
-## Limitações
+## Limitations
 
-1. **Não é o binário do app.** Medição via `mlx-lm` (Python) — mesmos kernels
-   MLX e mesmos pesos que o `mlx-swift-lm` do app, mas não a mesma pilha.
-2. **Gemma 4 12B não foi medido**: é a variante multimodal, que só o runtime
-   Swift do app implementa. Segue no catálogo como único multimodal, pendente
-   de medição dentro do app.
-3. **A avaliação de conteúdo tem um avaliador só** (Claude, lendo as saídas
-   contra a transcrição). É julgamento criterioso, não métrica reprodutível.
-4. **Uma gravação, uma execução por modelo.** Defeitos que só aparecem em outro
-   tipo de reunião não foram capturados — os loops, por exemplo, não existiam
-   numa gravação curta e apareceram na de 36 minutos.
+1. **Not the app's binary.** Measured via `mlx-lm` (Python): same MLX kernels
+   and same weights as the app's `mlx-swift-lm`, but not the same stack.
+2. **Gemma 4 12B was not measured**: it is the multimodal variant, which only
+   the app's Swift runtime implements. It stays in the catalog as the only
+   multimodal option, measurement inside the app still pending.
+3. **The content evaluation has a single judge** (Claude, reading the outputs
+   against the transcript). It is careful judgment, not a reproducible metric.
+4. **One recording, one run per model.** Defects that only show up in another
+   kind of meeting were not captured. The loops, for example, did not exist in
+   a short recording and only appeared in the 36-minute one.
