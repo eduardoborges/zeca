@@ -24,6 +24,16 @@ final class Summarizer: ObservableObject {
         ("claude-haiku-4-5", "Haiku 4.5 (fastest)"),
     ]
 
+    // Aliases do claude CLI: sempre apontam pro modelo mais novo de cada linha,
+    // entao a lista nao precisa acompanhar releases.
+    @AppStorage("claudeCodeModel") var claudeCodeModel = "sonnet"
+    static let claudeCodeModels: [(id: String, label: String)] = [
+        ("fable", "Fable (most capable)"),
+        ("opus", "Opus"),
+        ("sonnet", "Sonnet (recommended)"),
+        ("haiku", "Haiku (fastest)"),
+    ]
+
     static let languages: [(code: String, label: String)] = [
         ("auto", "Same as the meeting"),
         ("pt", "Portuguese"),
@@ -53,6 +63,20 @@ final class Summarizer: ObservableObject {
     var usesLocal: Bool { provider == "local" }
     var usesMLX: Bool { provider == "mlx" }
     var usesOpenAI: Bool { provider == "openai" }
+    var usesClaudeCode: Bool { provider == "claudecode" }
+
+    /// Binario do claude CLI, se instalado. O app nao herda o PATH do shell,
+    /// entao os lugares comuns sao checados na mao.
+    static var claudeCLIPath: String? {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let candidates = [
+            "\(home)/.claude/local/claude",
+            "/opt/homebrew/bin/claude",
+            "/usr/local/bin/claude",
+            "\(home)/.local/bin/claude",
+        ]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
 
     init() {
         // Retoma um download interrompido do modelo embarcado ao abrir o app.
@@ -64,6 +88,7 @@ final class Summarizer: ObservableObject {
         if usesMLX { return LocalLLM.shared.displayName }
         if usesLocal { return "Apple Intelligence (on-device)" }
         if usesOpenAI { return openaiModel.isEmpty ? "OpenAI-compatible API" : openaiModel }
+        if usesClaudeCode { return "Claude Code (\(claudeCodeModel.capitalized))" }
         let short = Self.claudeModels.first { $0.id == claudeModel }
             .map { $0.label.components(separatedBy: " (")[0] }
         return short.map { "Claude \($0)" } ?? "Claude"
@@ -73,6 +98,7 @@ final class Summarizer: ObservableObject {
     var isConfigured: Bool {
         if usesMLX { return LocalLLM.shared.state == .ready }
         if usesOpenAI { return !openaiBaseURL.isEmpty && !openaiModel.isEmpty }
+        if usesClaudeCode { return Self.claudeCLIPath != nil }
         return usesLocal || !apiKey.isEmpty
     }
 
@@ -205,6 +231,7 @@ final class Summarizer: ObservableObject {
         if usesMLX { return await completeMLX(system: system, user: user) }
         if usesLocal { return await completeLocal(system: system, user: user) }
         if usesOpenAI { return await completeOpenAI(system: system, user: user, maxTokens: maxTokens) }
+        if usesClaudeCode { return await completeClaudeCode(system: system, user: user) }
         return await completeClaude(system: system, user: user, maxTokens: maxTokens)
     }
 
@@ -408,6 +435,56 @@ final class Summarizer: ObservableObject {
             onPartial?(out)
         }
         return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Claude Code CLI em print mode: usa o login/assinatura do proprio CLI,
+    /// sem API key. Prompt inteiro (system + transcricao) vai por stdin;
+    /// sem streaming, a resposta chega de uma vez no fim.
+    private func completeClaudeCode(system: String, user: String) async -> String? {
+        guard let path = Self.claudeCLIPath else {
+            error = "Claude Code CLI not found. Install it, run claude once to log in, and try again."
+            return nil
+        }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: path)
+        process.arguments = ["-p", "--output-format", "text",
+                             "--model", claudeCodeModel,
+                             "--system-prompt", system]
+        process.currentDirectoryURL = FileManager.default.temporaryDirectory
+        let stdin = Pipe(), stdout = Pipe(), stderr = Pipe()
+        process.standardInput = stdin
+        process.standardOutput = stdout
+        process.standardError = stderr
+        do {
+            try process.run()
+        } catch {
+            self.error = error.localizedDescription
+            return nil
+        }
+        let prompt = user
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                stdin.fileHandleForWriting.write(Data(prompt.utf8))
+                stdin.fileHandleForWriting.closeFile()
+                let out = stdout.fileHandleForReading.readDataToEndOfFile()
+                let err = stderr.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                let text = String(decoding: out, as: UTF8.self)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                DispatchQueue.main.async {
+                    if process.terminationStatus != 0 || text.isEmpty {
+                        let message = String(decoding: err, as: UTF8.self)
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        self.error = message.isEmpty
+                            ? "Claude Code returned nothing. Run claude in a terminal and check the login."
+                            : message
+                        continuation.resume(returning: nil)
+                    } else {
+                        continuation.resume(returning: text)
+                    }
+                }
+            }
+        }
     }
 
     private func completeClaude(system: String, user: String, maxTokens: Int) async -> String? {

@@ -44,6 +44,7 @@ struct SettingsView: View {
             groupHeader("Cloud API")
             providerChoice("claude", "Claude")
             providerChoice("openai", "OpenAI-compatible")
+            providerChoice("claudecode", "Claude Code CLI")
         }
         Section(providerTitle) {
             providerDetails
@@ -80,6 +81,7 @@ struct SettingsView: View {
         case "mlx": return "Built-in model"
         case "local": return "Apple Intelligence"
         case "openai": return "OpenAI-compatible API"
+        case "claudecode": return "Claude Code CLI"
         default: return "Claude"
         }
     }
@@ -116,6 +118,18 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        } else if summarizer.usesClaudeCode {
+            Picker("Model", selection: Binding(
+                get: { summarizer.claudeCodeModel }, set: { summarizer.claudeCodeModel = $0 })) {
+                ForEach(Summarizer.claudeCodeModels, id: \.id) { item in
+                    Text(item.label).tag(item.id)
+                }
+            }
+            Text(Summarizer.claudeCLIPath.map {
+                "Uses your Claude Code login, so summaries count against that plan instead of API billing. CLI found at \($0)."
+            } ?? "Claude Code CLI not found. Install it and run claude once in a terminal to log in.")
+                .font(.caption)
+                .foregroundStyle(Summarizer.claudeCLIPath != nil ? Color.secondary : .orange)
         } else if summarizer.usesMLX {
             mlxRows
         } else if summarizer.usesLocal {
