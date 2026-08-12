@@ -20,14 +20,14 @@
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
-			<key>UTTypeIdentifier</key>
-			<string>com.zeca.meeting</string>
-			<key>UTTypeDescription</key>
-			<string>Zeca Meeting</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.data</string>
 			</array>
+			<key>UTTypeDescription</key>
+			<string>Zeca Meeting</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.zeca.meeting</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>

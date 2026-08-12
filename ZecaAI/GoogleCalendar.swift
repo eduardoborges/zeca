@@ -74,7 +74,7 @@ final class GoogleCalendar: ObservableObject {
                                 .split(whereSeparator: { $0 == "&" || $0 == " " })
                                 .first.map(String.init)
                         }
-                    let body = "<html><body style=\"font-family:sans-serif;text-align:center;padding-top:80px\"><h2>Zeca AI connected \(code == nil ? "failed" : "successfully") ✓</h2>You can close this window.</body></html>"
+                    let body = "<html><body style=\"font-family:sans-serif;text-align:center;padding-top:80px\"><h2>Zeca connected \(code == nil ? "failed" : "successfully") ✓</h2>You can close this window.</body></html>"
                     connection.send(content: Data("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n\(body)".utf8),
                                     completion: .contentProcessed { _ in connection.cancel() })
                     Task { @MainActor [weak self] in

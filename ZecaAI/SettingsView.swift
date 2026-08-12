@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Configuracoes (menu Zeca AI > Settings ou Cmd+,), tudo num form unico por secoes.
+/// Configuracoes (menu Zeca > Settings ou Cmd+,), tudo num form unico por secoes.
 struct SettingsView: View {
     @EnvironmentObject private var summarizer: Summarizer
     @ObservedObject private var google = GoogleCalendar.shared

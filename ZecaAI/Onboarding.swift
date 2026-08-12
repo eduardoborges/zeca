@@ -49,7 +49,7 @@ struct OnboardingView: View {
     private var welcome: some View {
         VStack(spacing: 20) {
             Waveform()
-            Text("Zeca AI")
+            Text("Zeca")
                 .font(.system(size: 44, weight: .bold, design: .rounded))
             Text("Your meetings recorded, transcribed and summarized.\nAll on your Mac.")
                 .font(.title3)
@@ -237,7 +237,7 @@ struct OnboardingView: View {
                 .symbolEffect(.pulse)
             Text("All set!")
                 .font(.system(size: 30, weight: .bold, design: .rounded))
-            Text("Zeca AI is free and open source. If it saves you time, a star on GitHub or a donation keeps it going.")
+            Text("Zeca is free and open source. If it saves you time, a star on GitHub or a donation keeps it going.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             HStack(spacing: 12) {
@@ -252,7 +252,7 @@ struct OnboardingView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.large)
             }
-            Button("Open Zeca AI") { withAnimation(.easeOut(duration: 0.4)) { onboarded = true } }
+            Button("Open Zeca") { withAnimation(.easeOut(duration: 0.4)) { onboarded = true } }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .padding(.top, 8)

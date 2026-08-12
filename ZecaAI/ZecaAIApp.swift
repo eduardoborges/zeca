@@ -6,6 +6,19 @@ struct ZecaAIApp: App {
     @StateObject private var transcriber = Transcriber()
     @StateObject private var summarizer = Summarizer()
 
+    /// O bundle id mudou de com.zeca.ZecaAI pra com.zeca.Zeca; os UserDefaults
+    /// (chaves de API, OAuth, onboarding) ficam presos no dominio antigo.
+    /// Copia tudo uma unica vez e nunca mais toca no assunto.
+    init() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: "migratedFromZecaAI"),
+              let old = defaults.persistentDomain(forName: "com.zeca.ZecaAI") else { return }
+        for (key, value) in old where defaults.object(forKey: key) == nil {
+            defaults.set(value, forKey: key)
+        }
+        defaults.set(true, forKey: "migratedFromZecaAI")
+    }
+
     var body: some Scene {
         WindowGroup(id: "main") {
             ContentView()
@@ -72,7 +85,7 @@ private struct StatusMenu: View {
             Text("No recording in progress")
         }
         Divider()
-        Button("Open Zeca AI") {
+        Button("Open Zeca") {
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }

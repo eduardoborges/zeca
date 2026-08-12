@@ -21,7 +21,7 @@ enum Notifier {
         }
         guard authorized == true else { return }
         let content = UNMutableNotificationContent()
-        content.title = "Zeca AI"
+        content.title = "Zeca"
         content.body = body
         content.sound = .default
         try? await center.add(UNNotificationRequest(

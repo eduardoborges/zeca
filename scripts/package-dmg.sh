@@ -43,5 +43,5 @@ trap 'rm -rf "$STAGE"' EXIT
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 
-hdiutil create -volname "Zeca AI" -srcfolder "$STAGE" -ov -format UDZO "$OUT"
+hdiutil create -volname "Zeca" -srcfolder "$STAGE" -ov -format UDZO "$OUT"
 echo "OK: $OUT ($(du -h "$OUT" | cut -f1))"
