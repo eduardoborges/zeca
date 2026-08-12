@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Fluxo de boas-vindas: apresentacao, chave da Anthropic e download do modelo local.
+/// Fluxo de boas-vindas: apresentacao, provider do resumo, download do modelo e apoio.
 struct OnboardingView: View {
     @AppStorage("onboarded") private var onboarded = false
     @EnvironmentObject private var transcriber: Transcriber
     @EnvironmentObject private var summarizer: Summarizer
+    @ObservedObject private var llm = LocalLLM.shared
 
     @State private var step = 0
     @State private var modelReady = false
@@ -19,8 +20,9 @@ struct OnboardingView: View {
                 Group {
                     switch step {
                     case 0: welcome
-                    case 1: keyStep
-                    default: modelStep
+                    case 1: providerStep
+                    case 2: modelStep
+                    default: supportStep
                     }
                 }
                 .frame(maxWidth: 460)
@@ -29,7 +31,7 @@ struct OnboardingView: View {
                 .id(step)
                 Spacer()
                 HStack(spacing: 8) {
-                    ForEach(0..<3, id: \.self) { index in
+                    ForEach(0..<4, id: \.self) { index in
                         Capsule()
                             .fill(index == step ? Color.primary : Color.secondary.opacity(0.3))
                             .frame(width: index == step ? 24 : 8, height: 8)
@@ -60,35 +62,116 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Passo 2: chave da API
+    // MARK: - Passo 2: provider do resumo
 
-    private var keyStep: some View {
+    private var providerStep: some View {
         VStack(spacing: 20) {
             Image(systemName: "sparkles")
                 .font(.system(size: 52))
                 .foregroundStyle(LinearGradient.zeca)
                 .symbolEffect(.pulse)
-            Text("Summaries with Claude")
+            Text("Summaries and notes")
                 .font(.system(size: 30, weight: .bold, design: .rounded))
-            Text("Paste your Anthropic API key and Claude writes the summary when a meeting ends. The key is stored only on your Mac.")
+            Text("Pick who writes the summary and the point by point when a meeting ends. You can change this later in Settings.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            SecureField("sk-ant-...", text: keyBinding)
-                .textFieldStyle(.roundedBorder)
-                .controlSize(.large)
-                .frame(maxWidth: 340)
+
+            Picker("", selection: providerBinding) {
+                Text("Claude API").tag("claude")
+                Text("Claude Code").tag("claudecode")
+                Text("Local model").tag("mlx")
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(maxWidth: 380)
+
+            providerDetail
+                .frame(minHeight: 88)
+
             HStack(spacing: 12) {
                 Button("Not now") { step = 2 }
                 Button("Continue") { step = 2 }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .disabled(summarizer.apiKey.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(!providerUsable)
             }
-            .padding(.top, 8)
-            Link("Create a key at console.anthropic.com",
-                 destination: URL(string: "https://console.anthropic.com/settings/keys")!)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var providerBinding: Binding<String> {
+        Binding(get: { summarizer.provider }, set: { choice in
+            summarizer.provider = choice
+            // O download do modelo local comeca na hora, com progresso aqui no wizard.
+            if choice == "mlx" { llm.prepare() }
+        })
+    }
+
+    @ViewBuilder
+    private var providerDetail: some View {
+        switch summarizer.provider {
+        case "claudecode":
+            VStack(spacing: 8) {
+                if let path = Summarizer.claudeCLIPath {
+                    Label("Claude Code CLI found", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("Summaries use your Claude Code login, so they count against that plan instead of API billing.\n\(path)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Label("Claude Code CLI not found", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text("Install it first, or pick another provider.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        case "mlx":
+            VStack(spacing: 8) {
+                switch llm.state {
+                case .ready:
+                    Label("\(llm.displayName) ready", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                case .downloading(let fraction):
+                    ProgressView(value: fraction)
+                        .frame(maxWidth: 300)
+                    Text("Downloading \(llm.displayName)... \(Int(fraction * 100))%")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                case .notDownloaded:
+                    ProgressView()
+                    Text("Starting the \(llm.displayName) download...")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text("Everything stays on your Mac. The download keeps going while you finish the setup.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+        default:
+            VStack(spacing: 8) {
+                SecureField("sk-ant-...", text: keyBinding)
+                    .textFieldStyle(.roundedBorder)
+                    .controlSize(.large)
+                    .frame(maxWidth: 340)
+                Text("The key is stored only on your Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Link("Create a key at console.anthropic.com",
+                     destination: URL(string: "https://console.anthropic.com/settings/keys")!)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Continue libera quando a escolha atual tem como funcionar.
+    private var providerUsable: Bool {
+        switch summarizer.provider {
+        case "claudecode": return Summarizer.claudeCLIPath != nil
+        case "mlx": return true // download segue em background
+        default: return !summarizer.apiKey.trimmingCharacters(in: .whitespaces).isEmpty
         }
     }
 
@@ -104,10 +187,10 @@ struct OnboardingView: View {
                 .font(.system(size: 52))
                 .foregroundStyle(modelReady ? .green : Color.primary)
                 .contentTransition(.symbolEffect(.replace))
-            Text(modelReady ? "All set!" : "Transcription model")
+            Text(modelReady ? "Model ready" : "Transcription model")
                 .font(.system(size: 30, weight: .bold, design: .rounded))
             Text(modelReady
-                 ? "Zeca AI is ready for your first meeting."
+                 ? "Transcription is set up and runs on the Neural Engine."
                  : "Parakeet TDT v3 runs entirely on your Mac, on the Neural Engine.\nNo audio ever leaves the computer. One-time ~600 MB download.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -130,17 +213,49 @@ struct OnboardingView: View {
             }
 
             if modelReady {
-                Button("Open Zeca AI") { withAnimation(.easeOut(duration: 0.4)) { onboarded = true } }
+                Button("Continue") { step = 3 }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
             } else if !downloading {
                 HStack(spacing: 12) {
-                    Button("Download later") { onboarded = true }
+                    Button("Download later") { step = 3 }
                     Button("Download model") { download() }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
                 }
             }
+        }
+    }
+
+    // MARK: - Passo 4: apoio ao projeto
+
+    private var supportStep: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "heart.fill")
+                .font(.system(size: 52))
+                .foregroundStyle(.pink)
+                .symbolEffect(.pulse)
+            Text("All set!")
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+            Text("Zeca AI is free and open source. If it saves you time, a star on GitHub or a donation keeps it going.")
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            HStack(spacing: 12) {
+                Link(destination: URL(string: "https://github.com/eduardoborges/zeca")!) {
+                    Label("Star on GitHub", systemImage: "star.fill")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                Link(destination: URL(string: "https://github.com/sponsors/eduardoborges")!) {
+                    Label("Donate", systemImage: "heart")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+            }
+            Button("Open Zeca AI") { withAnimation(.easeOut(duration: 0.4)) { onboarded = true } }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .padding(.top, 8)
         }
     }
 
