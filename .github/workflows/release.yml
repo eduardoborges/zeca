@@ -27,13 +27,33 @@ jobs:
     runs-on: macos-26
     permissions:
       contents: write
+    env:
+      # Sem os secrets de assinatura o release sai adhoc, como antes.
+      HAVE_SIGNING: ${{ secrets.MACOS_CERT_P12 != '' }}
     steps:
       - uses: actions/checkout@v4
       - name: Metal Toolchain
         run: xcodebuild -downloadComponent MetalToolchain
+      - name: Import signing certificate
+        if: env.HAVE_SIGNING == 'true'
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          echo "$CERT_P12" | base64 -d > cert.p12
+          security create-keychain -p ci build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ci build.keychain
+          security import cert.p12 -k build.keychain -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci build.keychain > /dev/null
+          rm cert.p12
       - name: Build and package
         env:
           MARKETING_VERSION: ${{ needs.release-please.outputs.version }}
+          SIGN_IDENTITY: ${{ env.HAVE_SIGNING == 'true' && 'Developer ID Application' || '' }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
         run: bash scripts/package-dmg.sh
       - name: Upload
         env:
