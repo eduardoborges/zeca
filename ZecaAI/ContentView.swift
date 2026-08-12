@@ -534,10 +534,13 @@ private struct NewMeetingView: View {
     }
 }
 
-/// Tela ao vivo: timer, medidores de fala, transcricao incremental e resumo por minuto.
+/// Tela ao vivo: timer e espectro de fala. A transcricao segue rodando por
+/// tras (transcript.json + titulo automatico); a tela so nao mostra mais.
 private struct LiveRecordingView: View {
     @EnvironmentObject private var recorder: Recorder
     @ObservedObject var live: LiveSession
+    // Checado uma vez por gravacao; trocar de dispositivo no meio e raro.
+    @State private var routeMismatch = AudioRoute.mismatch
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -567,63 +570,45 @@ private struct LiveRecordingView: View {
                 .padding(.horizontal)
             }
 
-            HSplitView {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 10) {
-                            if live.turns.isEmpty {
-                                Text("The transcript shows up here, sentence by sentence...")
-                                    .foregroundStyle(.secondary)
-                            }
-                            ForEach(Array(live.turns.enumerated()), id: \.offset) { TurnRow(turn: $1) }
-                            Color.clear.frame(height: 1).id("bottom")
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                    }
-                    .onChange(of: live.turns.count) {
-                        withAnimation { proxy.scrollTo("bottom") }
-                    }
-                }
-                .frame(minWidth: 280)
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Live summary", systemImage: "sparkles")
-                            .font(.headline)
-                        if let summary = live.summary {
-                            Text(LocalizedStringKey(summary)).textSelection(.enabled)
-                        } else {
-                            Text("Updated after every minute of conversation.")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .zecaGlass(in: RoundedRectangle(cornerRadius: 18))
-                    .padding(10)
-                }
-                .frame(minWidth: 220)
+            if routeMismatch {
+                Label("Mic and audio output are different devices. On loudspeakers, the meeting audio can leak into your mic. Use headphones, or route both through the same device.",
+                      systemImage: "speaker.wave.2.bubble")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
             }
+
+            Spacer()
         }
     }
 }
 
+/// Barra de nivel estilo VU ao lado do timer: ancorada a direita, enchendo
+/// pra esquerda. Ataque instantaneo, decaimento gradual (sem pisca-pisca).
 private struct LevelBar: View {
     let label: String
     let level: Float
     let tint: Color
+    @State private var displayed: Float = 0
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(label).font(.caption).foregroundStyle(.secondary)
-                .frame(width: 44, alignment: .trailing)
-            // Compressao suave pra fala baixa nao ficar invisivel.
-            // Sem animacao: o nivel e mostrado cru, em tempo real.
-            ProgressView(value: min(1, pow(Double(level), 0.5)))
-                .progressViewStyle(.linear)
-                .tint(tint)
-                .frame(width: 140)
+            GeometryReader { geo in
+                ZStack(alignment: .trailing) {
+                    Capsule().fill(.quaternary)
+                    // Compressao suave pra fala baixa nao ficar invisivel.
+                    Capsule().fill(tint)
+                        .frame(width: geo.size.width * CGFloat(min(1, pow(Double(displayed), 0.5))))
+                }
+            }
+            .frame(width: 140, height: 6)
+            .onChange(of: level) { _, new in
+                displayed = max(new, displayed * 0.82)
+            }
+            Text(label)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 44, alignment: .leading)
         }
     }
 }
@@ -703,7 +688,7 @@ private struct RecordingDetail: View {
         if turns.isEmpty {
             guard let transcribed = await transcriber.run(recording), !transcribed.isEmpty else { return }
             turns = transcribed
-            if notify { Notifier.finished("Transcript ready — \(recording.title)") }
+            if notify { Notifier.finished("Transcript ready: \(recording.title)") }
         }
     }
 
@@ -714,7 +699,7 @@ private struct RecordingDetail: View {
             let result = await summarizer.run(recording, turns: turns)
             if !Task.isCancelled {
                 summary = result
-                if result != nil { Notifier.finished("Summary ready — \(recording.title)") }
+                if result != nil { Notifier.finished("Summary ready: \(recording.title)") }
             }
             generatingSummary = false
             generationTask = nil
@@ -802,7 +787,7 @@ private struct RecordingDetail: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             if editingTitle {
-                TextField("Meeting title — leave empty to generate one", text: $titleDraft)
+                TextField("Meeting title (leave empty to generate one)", text: $titleDraft)
                     .textFieldStyle(.plain)
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .onSubmit { saveTitle() }
@@ -834,7 +819,7 @@ private struct RecordingDetail: View {
                             .lineLimit(1)
                         if generationTask != nil {
                             Button("Cancel") { cancelGeneration() }
-                                .help("Stops the summary or point by point being generated.")
+                                .help("Stops the text being generated right now.")
                         }
                     }
                 } else {
@@ -1022,7 +1007,7 @@ private struct RecordingDetail: View {
             let newNotes = await summarizer.runNotes(recording, turns: turns)
             if !Task.isCancelled {
                 notes = newNotes
-                Notifier.finished("Analysis ready — \(recording.title)")
+                Notifier.finished("Analysis ready: \(recording.title)")
             }
             generatingNotes = false
             generationTask = nil
@@ -1036,7 +1021,7 @@ private struct RecordingDetail: View {
             let result = await summarizer.runNotes(recording, turns: turns)
             if !Task.isCancelled {
                 notes = result
-                if result != nil { Notifier.finished("Point by point ready — \(recording.title)") }
+                if result != nil { Notifier.finished("Point by point ready: \(recording.title)") }
             }
             generatingNotes = false
             generationTask = nil

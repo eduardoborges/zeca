@@ -70,7 +70,7 @@ struct OnboardingView: View {
                 .symbolEffect(.pulse)
             Text("Summaries with Claude")
                 .font(.system(size: 30, weight: .bold, design: .rounded))
-            Text("Paste your Anthropic API key to generate meeting summaries, live, every minute. The key is stored only on your Mac.")
+            Text("Paste your Anthropic API key and Claude writes the summary when a meeting ends. The key is stored only on your Mac.")
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             SecureField("sk-ant-...", text: keyBinding)

@@ -200,7 +200,7 @@ final class Recorder: ObservableObject {
             isRecording = true
             error = nil
             sessionSummarizer = summarizer
-            live.start(folder: folder, transcriber: transcriber, summarizer: summarizer)
+            live.start(folder: folder, transcriber: transcriber)
         } catch {
             self.error = error.localizedDescription
             try? await self.stream?.stopCapture()

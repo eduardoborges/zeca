@@ -70,6 +70,28 @@ final class AudioSink: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 }
 
+/// O AEC do macOS so cancela bem quando mic e saida sao o mesmo aparelho.
+/// Validado empiricamente (ago/2026): mesmo dispositivo cancela a zero;
+/// rota cruzada (mic USB + caixas no jack) vaza a fala 6x acima do ruido.
+enum AudioRoute {
+    static var mismatch: Bool {
+        func device(_ selector: AudioObjectPropertySelector) -> AudioDeviceID? {
+            var id = AudioDeviceID(0)
+            var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+            var addr = AudioObjectPropertyAddress(
+                mSelector: selector,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain)
+            guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
+                                             &addr, 0, nil, &size, &id) == noErr, id != 0 else { return nil }
+            return id
+        }
+        guard let input = device(kAudioHardwarePropertyDefaultInputDevice),
+              let output = device(kAudioHardwarePropertyDefaultOutputDevice) else { return false }
+        return input != output
+    }
+}
+
 /// Captura o microfone via AVAudioEngine com voice processing ligado.
 /// O AEC do sistema subtrai do mic o que esta saindo pelos alto-falantes,
 /// entao a fala dos outros participantes nao vaza para a trilha "You".

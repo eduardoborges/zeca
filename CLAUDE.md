@@ -45,7 +45,7 @@ is picked up automatically — no pbxproj editing for new sources.
 |---|---|
 | `Recorder.swift` | `Recording` model, ScreenCaptureKit capture, pause, delete, auto-title hook |
 | `AudioSink.swift` | SCStream output → AAC files + 16kHz mono chunks for live transcription |
-| `LiveSession.swift` | Live pipeline: silence-based sentence segmentation (Hex-style whole-utterance decode), levels, per-minute live summary |
+| `LiveSession.swift` | Live pipeline: silence-based sentence segmentation (Hex-style whole-utterance decode), levels. Runs headless — the recording screen shows only timer/levels |
 | `Transcriber.swift` | `Turn`/`Speaker` types, offline Parakeet transcription, shared model loader (reentrant) |
 | `LocalLLM.swift` | Embedded on-device LLM (MLX): model catalog, download/delete, generation |
 | `AudioPlayer.swift` | `PlayerModel` (play/seek) + `MeetingAudio` combined-mix builder (meeting.m4a) |

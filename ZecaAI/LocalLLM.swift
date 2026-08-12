@@ -19,11 +19,11 @@ final class LocalLLM: ObservableObject {
     /// configurado estao marcados; velocidade sem obedecer o prompt nao serve.
     /// Em ordem de recomendacao.
     static let models: [(id: String, label: String, bytes: Int64)] = [
-        ("mlx-community/Qwen3.5-4B-4bit", "Qwen 3.5 4B — recommended: the most faithful on both tasks (3.1 GB)", 3_060_000_000),
-        ("mlx-community/Qwen3.5-9B-OptiQ-4bit", "Qwen 3.5 9B — just as faithful, more detail, slower (8.2 GB)", 8_220_000_000),
-        ("mlx-community/gemma-4-e4b-it-4bit", "Gemma 4 E4B — excellent point by point, brief summaries (5.2 GB)", 5_180_000_000),
-        ("mlx-community/NVIDIA-Nemotron-Nano-9B-v2-4bits", "Nemotron Nano 9B — faithful content, untidy formatting (5.0 GB)", 5_020_000_000),
-        ("mlx-community/gemma-4-12B-it-4bit", "Gemma 4 12B — Google's largest, reads images, not yet benchmarked (6.8 GB)", 6_770_000_000),
+        ("mlx-community/Qwen3.5-4B-4bit", "Qwen 3.5 4B: recommended, the most faithful on both tasks (3.1 GB)", 3_060_000_000),
+        ("mlx-community/Qwen3.5-9B-OptiQ-4bit", "Qwen 3.5 9B: just as faithful, more detail, slower (8.2 GB)", 8_220_000_000),
+        ("mlx-community/gemma-4-e4b-it-4bit", "Gemma 4 E4B: excellent point by point, brief summaries (5.2 GB)", 5_180_000_000),
+        ("mlx-community/NVIDIA-Nemotron-Nano-9B-v2-4bits", "Nemotron Nano 9B: faithful content, untidy formatting (5.0 GB)", 5_020_000_000),
+        ("mlx-community/gemma-4-12B-it-4bit", "Gemma 4 12B: Google's largest, reads images, not yet benchmarked (6.8 GB)", 6_770_000_000),
     ]
 
     // Catalogo curado por benchmark (BENCHMARK.md). Cortados por conteudo, nao por
@@ -38,7 +38,7 @@ final class LocalLLM: ObservableObject {
     /// Nome curto pro UI e rotulos de progresso ("Qwen 3 4B (on-device)").
     var displayName: String {
         let short = Self.models.first { $0.id == modelID }
-            .map { $0.label.components(separatedBy: " —")[0] } ?? "Local model"
+            .map { $0.label.components(separatedBy: ":")[0] } ?? "Local model"
         return "\(short) (on-device)"
     }
 

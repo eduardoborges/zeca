@@ -38,7 +38,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var providerSection: some View {
         Section("Summary provider") {
-            groupHeader("On-device — nothing leaves your Mac")
+            groupHeader("On-device (nothing leaves your Mac)")
             providerChoice("mlx", "Built-in model (MLX)")
             providerChoice("local", "Apple Intelligence")
             groupHeader("Cloud API")

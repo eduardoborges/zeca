@@ -183,7 +183,7 @@ final class Transcriber: ObservableObject {
         case .listing:
             return "Checking model files..."
         case .downloading(let done, let total):
-            return "Downloading Parakeet — \(done) of \(total) files"
+            return "Downloading Parakeet: \(done) of \(total) files"
         case .compiling(let model):
             return "Compiling \(model) for the Neural Engine..."
         }

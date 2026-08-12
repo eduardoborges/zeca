@@ -32,7 +32,7 @@ final class SampleBox: @unchecked Sendable {
     }
 }
 
-/// Transcricao e resumo ao vivo durante a gravacao.
+/// Transcricao ao vivo durante a gravacao.
 ///
 /// Segmentacao no estilo do Hex: em vez de blocos de tamanho fixo (que cortam
 /// palavras no meio e degradam o Parakeet), acumulamos fala ate uma pausa de
@@ -43,7 +43,6 @@ final class LiveSession: ObservableObject {
     @Published private(set) var turns: [Turn] = []
     @Published private(set) var micLevel: Float = 0
     @Published private(set) var systemLevel: Float = 0
-    @Published private(set) var summary: String?
     @Published private(set) var status: String?
 
     let box = SampleBox()
@@ -62,20 +61,13 @@ final class LiveSession: ObservableObject {
     private var loop: Task<Void, Never>?
     private var levelLoop: Task<Void, Never>?
     private var folder: URL?
-    private var summarizer: Summarizer?
-    private var lastSummaryAt = Date()
-    private var summarizedTurnCount = 0
     private var isTranscribing = false
 
-    func start(folder: URL, transcriber: Transcriber, summarizer: Summarizer) {
+    func start(folder: URL, transcriber: Transcriber) {
         self.folder = folder
-        self.summarizer = summarizer
         turns = []
-        summary = nil
         pending = [.me: [], .others: []]
         baseSample = [.me: 0, .others: 0]
-        lastSummaryAt = Date()
-        summarizedTurnCount = 0
         status = "Preparing the model..."
 
         loop = Task { [weak self] in
@@ -89,7 +81,6 @@ final class LiveSession: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(100))
                 await self.transcribeReadyUtterances(flush: false)
-                await self.summarizeIfDue()
             }
         }
         // Nivel de fala em loop proprio: a transcricao bloqueia o loop principal
@@ -182,19 +173,6 @@ final class LiveSession: ObservableObject {
         let new = Transcriber.turns(from: result, speaker: speaker, offset: offset)
         if !new.isEmpty {
             turns = (turns + new).sorted { $0.start < $1.start }
-        }
-    }
-
-    private func summarizeIfDue() async {
-        guard let summarizer, summarizer.isConfigured,
-              Date().timeIntervalSince(lastSummaryAt) >= 60,
-              turns.count > summarizedTurnCount
-        else { return }
-        lastSummaryAt = Date()
-        summarizedTurnCount = turns.count
-        if let text = await summarizer.summarize(turns) {
-            summary = text
-            if let folder { try? text.write(to: folder.appendingPathComponent("summary.md"), atomically: true, encoding: .utf8) }
         }
     }
 }
