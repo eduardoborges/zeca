@@ -1,5 +1,5 @@
 #!/bin/bash
-# Compila o ZecaAI (Release) e empacota build/ZecaAI.dmg com atalho pra /Applications.
+# Compila o Zeca (Release) e empacota build/Zeca.dmg com atalho pra /Applications.
 # Uso: scripts/package-dmg.sh  (sem argumentos)
 # Com SIGN_IDENTITY no ambiente assina com Developer ID; com as credenciais
 # NOTARY_* tambem notariza e grampeia o ticket no app. Sem nada, build adhoc.
@@ -8,15 +8,15 @@ cd "$(dirname "$0")/.."
 
 # Assinar durante o build nao rola: os plugins do SPM (mlx) exigem team proprio.
 # O build sai sem assinatura e o bundle e assinado por fora, de dentro pra fora.
-xcodebuild -project ZecaAI.xcodeproj -scheme ZecaAI -configuration Release build \
+xcodebuild -project Zeca.xcodeproj -scheme Zeca -configuration Release build \
   -derivedDataPath build \
   -skipPackagePluginValidation -skipMacroValidation \
   CODE_SIGNING_ALLOWED=NO \
   ${MARKETING_VERSION:+MARKETING_VERSION="$MARKETING_VERSION"} \
   -quiet
 
-APP="build/Build/Products/Release/ZecaAI.app"
-OUT="build/ZecaAI.dmg"
+APP="build/Build/Products/Release/Zeca.app"
+OUT="build/Zeca.dmg"
 
 if [[ -n "${SIGN_IDENTITY:-}" ]]; then
   find "$APP/Contents/Frameworks" \( -name "*.dylib" -o -name "*.framework" \) -maxdepth 1 2>/dev/null |
@@ -24,7 +24,7 @@ if [[ -n "${SIGN_IDENTITY:-}" ]]; then
       codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" "$item"
     done
   codesign --force --options runtime --timestamp \
-    --entitlements ZecaAI.entitlements --sign "$SIGN_IDENTITY" "$APP"
+    --entitlements Zeca.entitlements --sign "$SIGN_IDENTITY" "$APP"
 fi
 
 if [[ -n "${SIGN_IDENTITY:-}" && -n "${NOTARY_KEY_ID:-}" ]]; then

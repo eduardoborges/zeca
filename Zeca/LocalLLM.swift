@@ -241,7 +241,7 @@ final class LocalLLM: ObservableObject {
         out = out.replacingOccurrences(of: "<think>", with: "")
         out = out.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !out.isEmpty else {
-            throw NSError(domain: "ZecaAI", code: 4, userInfo: [NSLocalizedDescriptionKey:
+            throw NSError(domain: "Zeca", code: 4, userInfo: [NSLocalizedDescriptionKey:
                 "The model returned an empty answer. Try a larger model in Settings."])
         }
         return out

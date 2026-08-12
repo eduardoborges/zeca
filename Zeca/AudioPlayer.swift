@@ -27,7 +27,7 @@ enum MeetingAudio {
                 at: CMTime(seconds: offset, preferredTimescale: 600))
         }
         guard let export = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetAppleM4A) else {
-            throw NSError(domain: "ZecaAI", code: 3,
+            throw NSError(domain: "Zeca", code: 3,
                           userInfo: [NSLocalizedDescriptionKey: "Could not create the audio mix."])
         }
         try await export.export(to: out, as: .m4a)

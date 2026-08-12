@@ -16,6 +16,6 @@ jobs:
         run: xcodebuild -downloadComponent MetalToolchain
       - name: Build
         run: |
-          xcodebuild -project ZecaAI.xcodeproj -scheme ZecaAI -configuration Debug build \
+          xcodebuild -project Zeca.xcodeproj -scheme Zeca -configuration Debug build \
             -skipPackagePluginValidation -skipMacroValidation \
             CODE_SIGNING_ALLOWED=NO

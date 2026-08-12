@@ -5,7 +5,7 @@
 
   [![release](https://img.shields.io/github/v/release/eduardoborges/zeca)](https://github.com/eduardoborges/zeca/releases)
   [![platform](https://img.shields.io/badge/platform-macOS%2015%2B-blue)](#requirements)
-  [![swift](https://img.shields.io/badge/Swift-SwiftUI-orange)](ZecaAI/)
+  [![swift](https://img.shields.io/badge/Swift-SwiftUI-orange)](Zeca/)
 
 </div>
 
@@ -29,7 +29,7 @@
 
 ## Storage
 
-Everything is plain files under `~/Library/Application Support/ZecaAI/Recordings/<timestamp>/`:
+Everything is plain files under `~/Library/Application Support/Zeca/Recordings/<timestamp>/`:
 
 ```
 mic.m4a  system.m4a         audio tracks (absent in imported meetings)
@@ -54,19 +54,19 @@ zeca.json                   import manifest (only in imported meetings)
 ## 🛠 Build
 
 ```sh
-xcodebuild -project ZecaAI.xcodeproj -scheme ZecaAI -configuration Debug \
+xcodebuild -project Zeca.xcodeproj -scheme Zeca -configuration Debug \
   -skipPackagePluginValidation -skipMacroValidation build
 ```
 
 The skip flags approve mlx-swift's build plugin and macros for command-line builds. If the build complains about a missing Metal toolchain after an Xcode update, run `xcodebuild -downloadComponent MetalToolchain` once.
 
-You can also open `ZecaAI.xcodeproj` in Xcode and run. First launch downloads the Parakeet model (~650 MB) and asks for screen-recording, microphone and calendar permissions.
+You can also open `Zeca.xcodeproj` in Xcode and run. First launch downloads the Parakeet model (~650 MB) and asks for screen-recording, microphone and calendar permissions.
 
 ## Repository layout
 
 ```
-ZecaAI/            macOS app (SwiftUI)
-ZecaAI.xcodeproj/
+Zeca/            macOS app (SwiftUI)
+Zeca.xcodeproj/
 site/              landing page (static HTML/CSS, deployed to Cloudflare Pages)
 bitmap.svg         master logo (Inkscape)
 ```

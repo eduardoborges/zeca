@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct ZecaAIApp: App {
+struct ZecaApp: App {
     @StateObject private var recorder = Recorder()
     @StateObject private var transcriber = Transcriber()
     @StateObject private var summarizer = Summarizer()

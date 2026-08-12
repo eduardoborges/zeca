@@ -65,7 +65,7 @@ final class AudioSink: NSObject, SCStreamOutput, SCStreamDelegate {
                 try systemFile?.write(from: pcm)
             }
         } catch {
-            NSLog("ZecaAI: falha escrevendo %@: %@", systemURL.lastPathComponent, error.localizedDescription)
+            NSLog("Zeca: falha escrevendo %@: %@", systemURL.lastPathComponent, error.localizedDescription)
         }
     }
 }
@@ -130,7 +130,7 @@ final class MicCapture {
         let format = input.outputFormat(forBus: 0)
         guard let mono = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: format.sampleRate,
                                        channels: 1, interleaved: false) else {
-            throw NSError(domain: "ZecaAI", code: 2,
+            throw NSError(domain: "Zeca", code: 2,
                           userInfo: [NSLocalizedDescriptionKey: "Unsupported microphone format."])
         }
         file = try AVAudioFile(forWriting: url, settings: [
@@ -154,7 +154,7 @@ final class MicCapture {
             do {
                 try self.file?.write(from: out)
             } catch {
-                NSLog("ZecaAI: falha escrevendo mic.m4a: %@", error.localizedDescription)
+                NSLog("Zeca: falha escrevendo mic.m4a: %@", error.localizedDescription)
             }
             if let onSamples = self.onSamples, let samples = try? self.converter.resampleBuffer(out) {
                 onSamples(samples)

@@ -112,7 +112,7 @@ enum MeetingArchive {
         try process.run()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
-            throw NSError(domain: "ZecaAI", code: Int(process.terminationStatus),
+            throw NSError(domain: "Zeca", code: Int(process.terminationStatus),
                           userInfo: [NSLocalizedDescriptionKey: "Could not read or write the .zeca archive."])
         }
     }

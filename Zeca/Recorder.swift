@@ -95,9 +95,20 @@ final class Recorder: ObservableObject {
     private var currentFolder: URL?
     private var sessionSummarizer: Summarizer?
 
-    static let root = FileManager.default
-        .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("ZecaAI/Recordings", isDirectory: true)
+    static let root: URL = {
+        let support = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let new = support.appendingPathComponent("Zeca/Recordings", isDirectory: true)
+        // Rename do app: as gravacoes moravam em ZecaAI/. Move a pasta inteira uma vez.
+        let old = support.appendingPathComponent("ZecaAI/Recordings", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: new.path),
+           FileManager.default.fileExists(atPath: old.path) {
+            try? FileManager.default.createDirectory(
+                at: new.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? FileManager.default.moveItem(at: old, to: new)
+        }
+        return new
+    }()
 
     init() {
         refresh()
@@ -170,7 +181,7 @@ final class Recorder: ObservableObject {
             // Pede a permissao de gravacao de tela; lanca se o usuario negar.
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
             guard let display = content.displays.first else {
-                throw NSError(domain: "ZecaAI", code: 1,
+                throw NSError(domain: "Zeca", code: 1,
                               userInfo: [NSLocalizedDescriptionKey: "No display found."])
             }
 

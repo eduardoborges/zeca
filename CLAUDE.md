@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repo.
 
 ## What this is
 
-macOS meeting recorder (SwiftUI, `ZecaAI/`) plus a static landing page (`site/`).
+macOS meeting recorder (SwiftUI, `Zeca/`) plus a static landing page (`site/`).
 UI strings are **English**; code comments are Portuguese (sem acentos). User-facing
 conversation happens in Portuguese.
 
@@ -14,17 +14,17 @@ conversation happens in Portuguese.
 # build (BUILD SUCCEEDED is the only check; there are no tests)
 # the skip flags approve mlx-swift's build plugin/macros for CLI builds; if metal is
 # missing after an Xcode update: xcodebuild -downloadComponent MetalToolchain
-xcodebuild -project ZecaAI.xcodeproj -scheme ZecaAI -configuration Debug \
+xcodebuild -project Zeca.xcodeproj -scheme Zeca -configuration Debug \
   -skipPackagePluginValidation -skipMacroValidation build
 
 # run the built app
-open ~/Library/Developer/Xcode/DerivedData/ZecaAI-*/Build/Products/Debug/ZecaAI.app
+open ~/Library/Developer/Xcode/DerivedData/Zeca-*/Build/Products/Debug/Zeca.app
 
 # site (no build step, pure HTML/CSS + one inline script)
 npx wrangler pages deploy site --project-name zeca
 ```
 
-The project uses Xcode 16 synchronized folders: any file added under `ZecaAI/`
+The project uses Xcode 16 synchronized folders: any file added under `Zeca/`
 is picked up automatically — no pbxproj editing for new sources.
 
 ## Hard rules
