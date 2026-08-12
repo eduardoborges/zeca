@@ -11,3 +11,7 @@ xcuserdata/
 node_modules/
 dist/
 .wrangler/
+
+# chaves de assinatura nunca entram no repo
+*.p12
+*.p8
