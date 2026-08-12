@@ -1086,6 +1086,8 @@ private struct RecordingDetail: View {
                     }
                     Text(status).font(.caption).foregroundStyle(.secondary)
                 }
+            } else if let error = transcriber.error {
+                Text(error).font(.caption).foregroundStyle(.red)
             } else if turns.isEmpty {
                 Text("No speech detected in this recording.")
                     .foregroundStyle(.secondary)
