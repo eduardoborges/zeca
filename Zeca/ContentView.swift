@@ -98,12 +98,14 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            main
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    if onboarded, permissions.anyMissing {
-                        PermissionBanner(permissions: permissions)
-                    }
+            // Banner como linha de layout de verdade: safeAreaInset no split view
+            // deixava o sidebar desenhar por baixo do aviso.
+            VStack(spacing: 0) {
+                if onboarded, permissions.anyMissing {
+                    PermissionBanner(permissions: permissions)
                 }
+                main
+            }
             if !onboarded {
                 OnboardingView()
                     .background(.background)
