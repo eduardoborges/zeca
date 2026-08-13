@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.3.0](https://github.com/eduardoborges/zeca/compare/v1.2.0...v1.3.0) (2026-08-13)
+
+
+### Features
+
+* **brand:** finish the rename, ZecaAI becomes Zeca everywhere ([64fa351](https://github.com/eduardoborges/zeca/commit/64fa351073b8595d84b5787bc0ef8feefc60f2ae))
+* **brand:** rename Zeca AI to Zeca ([67bc4e6](https://github.com/eduardoborges/zeca/commit/67bc4e62fd8101fb4c97f5208fca813eb55513df))
+* **icon:** add app icon and enhance README with project description and features ([816c68b](https://github.com/eduardoborges/zeca/commit/816c68bf72b40ee7086aabf5db0d7fd4faa5cf13))
+* **meetings:** export and import meetings as .zeca archives ([615b682](https://github.com/eduardoborges/zeca/commit/615b682c9a6dcf13989a29cc7ec586dd12a39447))
+* **onboarding:** provider choice, inline downloads and support step ([b8a2272](https://github.com/eduardoborges/zeca/commit/b8a22721e07ba657c01ed2124bff2a9b7c072572))
+* **readme:** update title with emoji and refine description for clarity ([8eb58dc](https://github.com/eduardoborges/zeca/commit/8eb58dcd6ebdd2c83e2fd09216e2438a6a76c915))
+* **recording:** simplify the live screen and warn about split audio routes ([c24030e](https://github.com/eduardoborges/zeca/commit/c24030ea0c54942e46fed12ba401fe459637ec9c))
+* **release:** sign with Developer ID and notarize when secrets exist ([819df99](https://github.com/eduardoborges/zeca/commit/819df99c9529b816fd763e285aa7a7a4c4367b88))
+* **summary:** Claude Code CLI as a summary provider ([310dd4b](https://github.com/eduardoborges/zeca/commit/310dd4b8cf16e87dd51d6e709c9ee0cb3b802700))
+
+
+### Bug Fixes
+
+* **transcript:** show transcription errors in the conversation card ([9fb8138](https://github.com/eduardoborges/zeca/commit/9fb813807afcdb953248c1cef3765ec5a99554aa))
+
 ## [1.2.0](https://github.com/eduardoborges/zeca/compare/v1.1.0...v1.2.0) (2026-08-11)
 
 
