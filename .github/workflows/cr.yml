@@ -1,8 +1,8 @@
 name: CR
 
-# Continuous Release: acumula commits semanticos num PR de release
-# (CHANGELOG.md + version.txt). Mergear o PR cria a tag e a release,
-# e a release publicada dispara o CD, que anexa os builds.
+# Continuous Release: accumulates semantic commits into a release PR
+# (CHANGELOG.md + version.txt). Merging the PR creates the tag and the
+# release, and the published release triggers CD, which attaches the builds.
 on:
   push:
     branches: [main]

@@ -1,14 +1,14 @@
 name: CD
 
-# Builda a release publicada e anexa Zeca.dmg + Zeca.zip na tag.
-# O dispatch manual serve pra re-rodar o build de uma tag existente.
+# Builds a published release and attaches Zeca.dmg + Zeca.zip to the tag.
+# The manual dispatch rebuilds an existing tag.
 on:
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag da release (ex: v1.3.0)"
+        description: "Release tag (e.g. v1.3.0)"
         required: true
 
 permissions:
@@ -21,8 +21,11 @@ jobs:
   build-app:
     runs-on: macos-26
     timeout-minutes: 45
+    environment:
+      name: release
+      url: https://github.com/eduardoborges/zeca/releases/tag/${{ github.event.release.tag_name || inputs.tag }}
     env:
-      # Sem os secrets de assinatura o build sai adhoc, como antes.
+      # Without the signing secrets the build ships adhoc, as before.
       HAVE_SIGNING: ${{ secrets.MACOS_CERT_P12 != '' }}
     steps:
       - uses: actions/checkout@v4

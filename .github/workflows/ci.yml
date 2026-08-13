@@ -1,13 +1,13 @@
 name: CI
 
-# Valida PRs antes do merge. O build de release fica no CD.
+# Validates pull requests. Release builds live in CD.
 on:
   pull_request:
     paths-ignore: ['site/**', '**.md']
 
 jobs:
   build:
-    # macos-26: o codigo usa APIs do SDK 26 (glassEffect, FoundationModels) atras de #available
+    # macos-26: the code uses SDK 26 APIs (glassEffect, FoundationModels) behind #available
     runs-on: macos-26
     timeout-minutes: 45
     steps:
