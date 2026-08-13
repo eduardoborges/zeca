@@ -1,7 +1,9 @@
 <div align="center">
   <img src=".github/icon.png" width="128" alt="Zeca app icon">
   <h1>🐶 Zeca</h1>
-  <p>Meeting recorder for <strong>macOS</strong>. Records, transcribes and summarizes on your Mac, with any meeting app. Named after a real dog.</p>
+  <p>Meeting recorder for <strong>macOS</strong>. Records, transcribes and summarizes on your Mac, with any meeting app.<br>
+  <strong>Private by design:</strong> your audio never leaves the machine, and you own every file it writes. No account, no tracking, no analytics.<br>
+  Named after a real dog.</p>
 
   [![release](https://img.shields.io/github/v/release/eduardoborges/zeca)](https://github.com/eduardoborges/zeca/releases)
   [![platform](https://img.shields.io/badge/platform-macOS%2015%2B-blue)](#requirements)
@@ -13,19 +15,22 @@
 
 **[Site](https://zeca.eduardoborges.dev)** · **[Benchmark](BENCHMARK.md)** · **[Changelog](CHANGELOG.md)**
 
-## 🎙 What it does
+## What it does
 
-- Records your microphone and the system audio as separate tracks (ScreenCaptureKit), so it works with Zoom, Meet, Teams or anything else that makes sound.
-- Transcribes live while you talk. Parakeet TDT v3 runs on the Neural Engine and cuts sentences on silence, in whatever language the meeting happens to be in.
-- Keeps speakers simple: your microphone is "You", everything else is "Others". No diarization guesswork. Double-click a name to rename it.
-- Writes a quick recap with next steps, plus a longer point-by-point account in reported speech. Each document remembers which model wrote it.
-- Lets you pick the summary model: Claude API, your Claude Code login (no API key), any OpenAI-compatible API, a bundled on-device model (MLX), or Apple Intelligence.
-- Exports and imports meetings as `.zeca` files: audio, transcript and summaries in one archive, with author and export date in a manifest. Double-click one to preview it before importing.
-- Creates meetings from a pasted transcript. If you have a `.vtt` from Zoom or plain "Name: sentence" lines, paste them and you get the same summaries, just without audio.
-- Ships an on-device model catalog picked by testing: every candidate ran both tasks on a real 36-minute meeting and had its output read for faithfulness. Method and results in [BENCHMARK.md](BENCHMARK.md).
-- Translates the transcript, summary and notes on demand, with a cache per language.
-- Shows your day on a dashboard: today's events from macOS Calendar and Google Calendar (OAuth), one click to join a call with recording already running, weekly stats.
-- Plus the small stuff: automatic titles for unnamed meetings, a pause that really cuts the audio, a menu bar timer with controls, and a warning when your mic and speakers are different devices (echo cancellation only works well on the same device).
+- 🔒 **Nothing leaves your Mac.** Recording and transcription are fully on-device, summaries too unless you deliberately point them at a cloud model. No backend, no telemetry, nothing phones home.
+- 🎙 **Works with any meeting app.** Mic and system audio recorded as separate tracks, so Zoom, Meet, Teams or anything else that makes sound just works.
+- ⚡ **Live transcription on the Neural Engine.** Parakeet TDT v3 transcribes while you talk, in whatever language the meeting happens to be in.
+- 📝 **Summaries by the model you choose.** Quick recap with next steps plus a point-by-point account, written on-device (MLX or Apple Intelligence) or by Claude, your Claude Code login, or any OpenAI-compatible API.
+- 📦 **Your data is just files.** Plain m4a, JSON and Markdown on disk. Export a whole meeting as one `.zeca` archive and import it anywhere.
+
+And the rest:
+
+- Day dashboard with macOS and Google Calendar events, one click to join a call with recording already running, weekly stats.
+- Paste a Zoom `.vtt` or plain "Name: sentence" lines and get the same summaries, no audio needed.
+- Translation of transcript, summary and notes on demand, cached per language.
+- Speakers stay simple: "You" and "Others", double-click to rename. No diarization guesswork.
+- The bundled model catalog comes from a real benchmark, not vibes: [BENCHMARK.md](BENCHMARK.md).
+- Automatic titles, a pause that really cuts the audio, a menu bar timer, and a warning when mic and speakers are different devices (echo cancellation likes them equal).
 
 ## Storage
 
