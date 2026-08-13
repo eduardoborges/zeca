@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.0](https://github.com/eduardoborges/zeca/compare/v1.3.0...v1.4.0) (2026-08-13)
+
+
+### Features
+
+* **site:** wire the download buttons to the latest release dmg ([2a2c44e](https://github.com/eduardoborges/zeca/commit/2a2c44e0f95b7dc7553d54a8520a82ebba876834))
+
+
+### Bug Fixes
+
+* **ui:** stop the permission banner from overlapping the sidebar ([c2790c5](https://github.com/eduardoborges/zeca/commit/c2790c56773b03e8f7492afbee571620725eaa61))
+
 ## [1.3.0](https://github.com/eduardoborges/zeca/compare/v1.2.0...v1.3.0) (2026-08-13)
 
 
