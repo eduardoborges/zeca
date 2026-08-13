@@ -1,37 +1,33 @@
-name: Release
+name: CD
 
+# Builda a release publicada e anexa Zeca.dmg + Zeca.zip na tag.
+# O dispatch manual serve pra re-rodar o build de uma tag existente.
 on:
-  push:
-    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag da release (ex: v1.3.0)"
+        required: true
 
 permissions:
   contents: write
-  pull-requests: write
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
 
 jobs:
-  # Acumula os commits semanticos num PR de release (CHANGELOG.md + version.txt).
-  # Mergear o PR cria a tag e a release; o job abaixo anexa o app.
-  release-please:
-    runs-on: ubuntu-latest
-    outputs:
-      release_created: ${{ steps.rp.outputs.release_created }}
-      tag_name: ${{ steps.rp.outputs.tag_name }}
-      version: ${{ steps.rp.outputs.version }}
-    steps:
-      - uses: googleapis/release-please-action@v4
-        id: rp
-
   build-app:
-    needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
     runs-on: macos-26
-    permissions:
-      contents: write
+    timeout-minutes: 45
     env:
-      # Sem os secrets de assinatura o release sai adhoc, como antes.
+      # Sem os secrets de assinatura o build sai adhoc, como antes.
       HAVE_SIGNING: ${{ secrets.MACOS_CERT_P12 != '' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - name: Metal Toolchain
         run: xcodebuild -downloadComponent MetalToolchain
       - name: Import signing certificate
@@ -49,15 +45,15 @@ jobs:
           rm cert.p12
       - name: Build and package
         env:
-          MARKETING_VERSION: ${{ needs.release-please.outputs.version }}
+          MARKETING_VERSION: ${{ env.TAG }}
           SIGN_IDENTITY: ${{ env.HAVE_SIGNING == 'true' && 'Developer ID Application' || '' }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
           NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
-        run: bash scripts/package-dmg.sh
+        run: MARKETING_VERSION="${MARKETING_VERSION#v}" bash scripts/package-dmg.sh
       - name: Upload
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ditto -c -k --keepParent build/Build/Products/Release/Zeca.app build/Zeca.zip
-          gh release upload '${{ needs.release-please.outputs.tag_name }}' build/Zeca.zip build/Zeca.dmg
+          gh release upload "$TAG" build/Zeca.zip build/Zeca.dmg --clobber
