@@ -2,19 +2,37 @@ import FluidAudio
 import Foundation
 
 /// Buffer thread-safe entre a fila de audio e a transcricao ao vivo.
-/// A fila de audio faz append; o loop da LiveSession drena.
+/// Mic e sistema entram separados e saem somados num fluxo so: sem AEC, o mic tambem
+/// ouve a reuniao pelas caixas, e transcrever cada trilha duplicaria as falas.
 final class SampleBox: @unchecked Sendable {
     private let lock = NSLock()
     private var buffers: [Speaker: [Float]] = [.me: [], .others: []]
     private var peaks: [Speaker: Float] = [.me: 0, .others: 0]
+    private var starts: [Speaker: TimeInterval] = [:]
+    private var taken = 0 // amostras ja somadas e entregues
 
-    func append(_ speaker: Speaker, _ samples: [Float]) {
+    func append(_ speaker: Speaker, _ samples: [Float], at time: TimeInterval) {
         var peak: Float = 0
         for sample in samples { peak = max(peak, abs(sample)) }
         lock.lock()
-        buffers[speaker]?.append(contentsOf: samples)
+        defer { lock.unlock() }
         peaks[speaker] = max(peaks[speaker] ?? 0, peak)
-        lock.unlock()
+        if starts[speaker] == nil {
+            starts[speaker] = time
+            // Alinha pelo primeiro buffer, como o offsets.json faz no player: a fonte que
+            // comecou depois ganha silencio na frente, nao importa qual buffer chegou primeiro.
+            let other: Speaker = speaker == .me ? .others : .me
+            if let otherStart = starts[other] {
+                let lead = Int(((time - otherStart) * 16_000).rounded()) - taken
+                let silence = [Float](repeating: 0, count: abs(lead))
+                if lead > 0 {
+                    buffers[speaker] = silence
+                } else {
+                    buffers[other]?.insert(contentsOf: silence, at: 0)
+                }
+            }
+        }
+        buffers[speaker]?.append(contentsOf: samples)
     }
 
     /// Devolve e zera o pico acumulado desde a ultima leitura.
@@ -24,11 +42,23 @@ final class SampleBox: @unchecked Sendable {
         return peaks[speaker] ?? 0
     }
 
-    /// Drena tudo que chegou desde a ultima leitura.
-    func takeAll(_ speaker: Speaker) -> [Float] {
+    /// Soma o que as duas fontes ja entregaram. Fonte parada por mais de 2s
+    /// (sem permissao de mic, aparelho desconectado) nao segura a outra.
+    func takeMixed(flush: Bool) -> [Float] {
         lock.lock()
-        defer { buffers[speaker] = []; lock.unlock() }
-        return buffers[speaker] ?? []
+        defer { lock.unlock() }
+        let mic = buffers[.me] ?? [], system = buffers[.others] ?? []
+        var count = min(mic.count, system.count)
+        if flush || max(mic.count, system.count) - count > 2 * 16_000 {
+            count = max(mic.count, system.count)
+        }
+        var mixed = [Float](repeating: 0, count: count)
+        for i in 0..<min(count, mic.count) { mixed[i] += mic[i] }
+        for i in 0..<min(count, system.count) { mixed[i] += system[i] }
+        buffers[.me] = Array(mic.dropFirst(count))
+        buffers[.others] = Array(system.dropFirst(count))
+        taken += count
+        return mixed
     }
 }
 
@@ -45,7 +75,7 @@ final class LiveSession: ObservableObject {
     @Published private(set) var systemLevel: Float = 0
     @Published private(set) var status: String?
 
-    let box = SampleBox()
+    private var box = SampleBox()
 
     private static let sampleRate = 16_000
     // ponytail: limiares fixos; viram ajuste fino se errarem em mic muito baixo/alto.
@@ -56,18 +86,19 @@ final class LiveSession: ObservableObject {
     private static let minClip = Int(1.5 * 16_000.0)       // aprendizado do Hex: pad minimo de 1.5s
 
     private var manager: AsrManager?
-    private var pending: [Speaker: [Float]] = [.me: [], .others: []]
-    private var baseSample: [Speaker: Int] = [.me: 0, .others: 0]
+    private var pending: [Float] = []
+    private var baseSample = 0
     private var loop: Task<Void, Never>?
     private var levelLoop: Task<Void, Never>?
     private var folder: URL?
     private var isTranscribing = false
 
-    func start(folder: URL, transcriber: Transcriber) {
+    func start(folder: URL, transcriber: Transcriber, box: SampleBox) {
         self.folder = folder
+        self.box = box
         turns = []
-        pending = [.me: [], .others: []]
-        baseSample = [.me: 0, .others: 0]
+        pending = []
+        baseSample = 0
         status = "Preparing the model..."
 
         loop = Task { [weak self] in
@@ -118,19 +149,18 @@ final class LiveSession: ObservableObject {
         guard let manager, !isTranscribing else { return }
         isTranscribing = true
         defer { isTranscribing = false }
-        for speaker in [Speaker.me, .others] {
-            pending[speaker]?.append(contentsOf: box.takeAll(speaker))
-            while let (samples, startSample) = nextUtterance(for: speaker, flush: flush) {
-                await transcribe(samples, from: speaker, startSample: startSample, with: manager)
-            }
+        pending.append(contentsOf: box.takeMixed(flush: flush))
+        while let (samples, startSample) = nextUtterance(flush: flush) {
+            await transcribe(samples, startSample: startSample, with: manager)
         }
     }
 
     /// Corta a proxima frase completa do buffer: fala seguida de pausa de silencio,
     /// fala continua acima de 15s, ou tudo que sobrou no flush final.
-    private func nextUtterance(for speaker: Speaker, flush: Bool) -> (samples: [Float], startSample: Int)? {
-        guard var samples = pending[speaker], !samples.isEmpty else { return nil }
-        let base = baseSample[speaker] ?? 0
+    private func nextUtterance(flush: Bool) -> (samples: [Float], startSample: Int)? {
+        var samples = pending
+        guard !samples.isEmpty else { return nil }
+        let base = baseSample
 
         var cut: Int
         if flush || samples.count >= Self.maxUtterance {
@@ -145,8 +175,8 @@ final class LiveSession: ObservableObject {
             guard speechEnd > 0 else {
                 // So silencio acumulado: descarta, deixando um rabinho de contexto.
                 if samples.count > Self.keepTail {
-                    baseSample[speaker] = base + samples.count - Self.keepTail
-                    pending[speaker] = Array(samples.suffix(Self.keepTail))
+                    baseSample = base + samples.count - Self.keepTail
+                    pending = Array(samples.suffix(Self.keepTail))
                 }
                 return nil
             }
@@ -155,22 +185,22 @@ final class LiveSession: ObservableObject {
 
         let utterance = Array(samples[0..<cut])
         samples.removeFirst(cut)
-        pending[speaker] = samples
-        baseSample[speaker] = base + cut
+        pending = samples
+        baseSample = base + cut
 
         // Frase inteira de silencio nao vale uma passada no modelo.
         guard utterance.contains(where: { abs($0) >= Self.silenceThreshold }) else { return nil }
         return (utterance, base)
     }
 
-    private func transcribe(_ samples: [Float], from speaker: Speaker, startSample: Int, with manager: AsrManager) async {
+    private func transcribe(_ samples: [Float], startSample: Int, with manager: AsrManager) async {
         var clip = samples
         if clip.count < Self.minClip { clip.append(contentsOf: [Float](repeating: 0, count: Self.minClip - clip.count)) }
         var state = TdtDecoderState.make(decoderLayers: await manager.decoderLayerCount)
         let language = LanguageSetting.code.flatMap(Language.init(rawValue:))
         guard let result = try? await manager.transcribe(clip, decoderState: &state, language: language) else { return }
         let offset = Double(startSample) / Double(Self.sampleRate)
-        let new = Transcriber.turns(from: result, speaker: speaker, offset: offset)
+        let new = Transcriber.turns(from: result, speaker: .mixed, offset: offset)
         if !new.isEmpty {
             turns = (turns + new).sorted { $0.start < $1.start }
         }

@@ -541,8 +541,6 @@ private struct NewMeetingView: View {
 private struct LiveRecordingView: View {
     @EnvironmentObject private var recorder: Recorder
     @ObservedObject var live: LiveSession
-    // Checado uma vez por gravacao; trocar de dispositivo no meio e raro.
-    @State private var routeMismatch = AudioRoute.mismatch
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -570,14 +568,6 @@ private struct LiveRecordingView: View {
                     Text(status).foregroundStyle(.secondary)
                 }
                 .padding(.horizontal)
-            }
-
-            if routeMismatch {
-                Label("Mic and audio output are different devices. On loudspeakers, the meeting audio can leak into your mic. Use headphones, or route both through the same device.",
-                      systemImage: "speaker.wave.2.bubble")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal)
             }
 
             Spacer()
@@ -1284,20 +1274,25 @@ private struct TurnRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Circle()
-                .fill(SpeakerStyle.color(for: turn.label).opacity(0.18))
-                .frame(width: 30, height: 30)
-                .overlay {
-                    Text(SpeakerStyle.initials(for: turn.label))
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(SpeakerStyle.color(for: turn.label))
-                }
+            // Gravacao mixada nao tem falante: so hora e texto.
+            if !turn.label.isEmpty {
+                Circle()
+                    .fill(SpeakerStyle.color(for: turn.label).opacity(0.18))
+                    .frame(width: 30, height: 30)
+                    .overlay {
+                        Text(SpeakerStyle.initials(for: turn.label))
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(SpeakerStyle.color(for: turn.label))
+                    }
+            }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
-                    Text(turn.label)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(SpeakerStyle.color(for: turn.label))
-                        .onTapGesture(count: 2) { onRename?(turn.label) }
+                    if !turn.label.isEmpty {
+                        Text(turn.label)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(SpeakerStyle.color(for: turn.label))
+                            .onTapGesture(count: 2) { onRename?(turn.label) }
+                    }
                     Text(Duration.seconds(turn.start).formatted(.time(pattern: .minuteSecond)))
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.tertiary)

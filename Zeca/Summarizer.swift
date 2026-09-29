@@ -127,7 +127,7 @@ final class Summarizer: ObservableObject {
             **Short topic title**
             One full paragraph describing that part of the discussion: what was raised, the arguments and examples given, the reactions, and how that part ended.
 
-            Describe everything in your own words, as reported speech — never quote lines verbatim from the transcript. The transcript only identifies speakers as "You" and "Others", so name a person only when the transcript itself makes clear who is speaking or being addressed; otherwise write "the speaker", "someone", or no attribution at all. Be thorough and keep the detail; length is not a problem. The topic title goes in bold with ** on its own line, followed by the paragraph. No introduction, no conclusion, no bullets, never use # or Markdown headers. Stay faithful to the transcript, do not invent. Never repeat a sentence or paragraph you have already written.
+            Describe everything in your own words, as reported speech — never quote lines verbatim from the transcript. The transcript may not say who is speaking, so name a person only when the transcript itself makes clear who is speaking or being addressed; otherwise write "the speaker", "someone", or no attribution at all. Be thorough and keep the detail; length is not a problem. The topic title goes in bold with ** on its own line, followed by the paragraph. No introduction, no conclusion, no bullets, never use # or Markdown headers. Stay faithful to the transcript, do not invent. Never repeat a sentence or paragraph you have already written.
             """,
             maxTokens: 8192)
         else { return nil }
@@ -148,7 +148,7 @@ final class Summarizer: ObservableObject {
             One paragraph (3-5 sentences) with the essence of the meeting: what it was about, the key facts and how it ended.
 
             **Next steps**
-            One bullet (-) per action someone committed to or was assigned, at most 8 bullets in total. The transcript only identifies speakers as "You" and "Others", so you usually do not know who is who: start a bullet with a person's name in bold only when the transcript itself makes clear that person took the action on. When the owner is not clear, write the action without a name. Never list a person who has no action. Omit the whole section if there are no real commitments.
+            One bullet (-) per action someone committed to or was assigned, at most 8 bullets in total. The transcript may not say who is speaking, so you usually do not know who is who: start a bullet with a person's name in bold only when the transcript itself makes clear that person took the action on. When the owner is not clear, write the action without a name. Never list a person who has no action. Omit the whole section if there are no real commitments.
 
             Section titles in bold with **, never use # or Markdown headers. Stay faithful to the transcript, do not invent. Never repeat a bullet you have already written.
             """,
@@ -213,12 +213,14 @@ final class Summarizer: ObservableObject {
 
     private func complete(turns: [Turn], system: String, maxTokens: Int) async -> String? {
         // label, nao speaker.label: reuniao importada e renames manuais trazem o nome real.
-        let transcript = turns.map { "[\($0.label)] \($0.text)" }.joined(separator: "\n")
+        // Gravacao mixada nao tem rotulo.
+        let transcript = turns.map { $0.label.isEmpty ? $0.text : "[\($0.label)] \($0.text)" }
+            .joined(separator: "\n")
         // A instrucao de idioma volta no fim: entre ela no system e a resposta ha uma
         // transcricao inteira, e modelo pequeno segue o idioma do que leu por ultimo.
         // Medido: o Qwen 3.5 9B respondia em ingles numa reuniao de 36min e passou a
         // respeitar o portugues so com essa repeticao.
-        let user = "Meeting transcript (\"You\" = microphone, \"Others\" = system audio):"
+        let user = "Meeting transcript:"
             + "\n\n\(transcript)\n\n\(languageInstruction)"
         isRunning = true
         defer { isRunning = false }

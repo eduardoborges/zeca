@@ -9,8 +9,15 @@ enum LanguageSetting {
 enum Speaker: String, Codable {
     case me       // trilha do microfone
     case others   // trilha do sistema
+    case mixed    // mic e sistema somados: a transcricao nao sabe quem falou
 
-    var label: String { self == .me ? "You" : "Others" }
+    var label: String {
+        switch self {
+        case .me: "You"
+        case .others: "Others"
+        case .mixed: ""
+        }
+    }
 }
 
 /// Um bloco contiguo de fala de um lado da conversa.
@@ -101,35 +108,28 @@ final class Transcriber: ObservableObject {
     private var manager: AsrManager?
     private var managerTask: Task<AsrManager, Error>?
 
-    /// Transcreve as duas trilhas com o Parakeet e devolve a conversa intercalada.
+    /// Transcreve com o Parakeet a mistura das duas trilhas, a mesma do player.
     /// Grava o resultado em transcript.json dentro da pasta da gravacao.
     func run(_ recording: Recording) async -> [Turn]? {
         error = nil
         do {
-            var turns: [Turn] = []
-            let offsets = recording.offsets
-            let tracks = [
-                (recording.mic, Speaker.me, offsets.mic),
-                (recording.system, Speaker.others, offsets.system),
-            ].filter { FileManager.default.fileExists(atPath: $0.0.path) }
-
             // Reuniao importada (sem audio): nada a transcrever, e o transcript
             // colado nao pode ser sobrescrito por um JSON vazio.
-            guard !tracks.isEmpty else {
+            guard [recording.mic, recording.system].contains(where: {
+                FileManager.default.fileExists(atPath: $0.path)
+            }) else {
                 status = nil
                 return nil
             }
 
             let manager = try await loadManager()
             let language = LanguageSetting.code.flatMap(Language.init(rawValue:))
-            for (url, speaker, offset) in tracks {
-                status = "Transcribing \(speaker.label)..."
-                var state = TdtDecoderState.make(decoderLayers: await manager.decoderLayerCount)
-                let result = try await manager.transcribe(url, decoderState: &state, language: language)
-                turns += Self.turns(from: result, speaker: speaker, offset: offset)
-            }
+            status = "Transcribing..."
+            let url = try await MeetingAudio.buildCombined(for: recording)
+            var state = TdtDecoderState.make(decoderLayers: await manager.decoderLayerCount)
+            let result = try await manager.transcribe(url, decoderState: &state, language: language)
+            let turns = Self.turns(from: result, speaker: .mixed, offset: 0)
 
-            turns.sort { $0.start < $1.start }
             if let data = try? JSONEncoder().encode(turns) {
                 try? data.write(to: recording.transcriptURL)
             }

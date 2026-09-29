@@ -2,25 +2,27 @@ import AVFoundation
 import FluidAudio
 import ScreenCaptureKit
 
-/// Escreve a trilha do sistema (SCStream) em AAC.
-/// O microfone e capturado a parte pelo MicCapture (com echo cancellation).
+/// Escreve as duas trilhas do SCStream, sistema e microfone, em arquivos AAC separados.
+/// Os dois outputs usam a mesma fila, entao o estado aqui e serializado por ela.
+/// O mic vem cru: voice processing abaixa o mic e o volume da reuniao.
 final class AudioSink: NSObject, SCStreamOutput, SCStreamDelegate {
     let queue = DispatchQueue(label: "ai.zeca.audio")
 
-    private let systemURL: URL
-    private var systemFile: AVAudioFile?
-    // PTS do primeiro buffer (relogio host, o mesmo do MicCapture) para alinhar as trilhas.
-    private(set) var systemStart: TimeInterval?
+    private let urls: [Speaker: URL]
+    private var files: [Speaker: AVAudioFile] = [:]
+    /// PTS do primeiro buffer de cada trilha (relogio host), usado para alinhar as duas.
+    private(set) var starts: [Speaker: TimeInterval] = [:]
+    private var converted: [Speaker: (seconds: Double, samples: Int)] = [:]
 
     /// Chamado fora da fila de audio. Erro fatal da stream (ex: usuario revogou a permissao).
     var onStop: ((Error) -> Void)?
 
-    /// Chamado na fila de audio com cada chunk ja em 16kHz mono, para a transcricao ao vivo.
-    var onSamples: (([Float]) -> Void)?
-    private let systemConverter = AudioConverter()
+    /// Chamado na fila de audio com cada chunk ja em 16kHz mono e o PTS dele, para a transcricao ao vivo.
+    var onSamples: ((Speaker, [Float], TimeInterval) -> Void)?
+    private let converter = AudioConverter()
 
-    init(systemURL: URL) {
-        self.systemURL = systemURL
+    init(systemURL: URL, micURL: URL) {
+        urls = [.others: systemURL, .me: micURL]
     }
 
     // Lido na fila de audio; escrito via setPaused, que serializa na mesma fila.
@@ -31,11 +33,18 @@ final class AudioSink: NSObject, SCStreamOutput, SCStreamDelegate {
     }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer buffer: CMSampleBuffer, of type: SCStreamOutputType) {
-        guard type == .audio, buffer.isValid, buffer.numSamples > 0, !isPaused else { return }
-        if systemStart == nil { systemStart = buffer.presentationTimeStamp.seconds }
-        write(buffer)
-        if let onSamples, let samples = try? systemConverter.resampleSampleBuffer(buffer) {
-            onSamples(samples)
+        guard buffer.isValid, buffer.numSamples > 0, !isPaused else { return }
+        let speaker: Speaker
+        switch type {
+        case .audio: speaker = .others
+        case .microphone: speaker = .me
+        default: return // .screen: configurado no minimo, ignorado
+        }
+        let pts = buffer.presentationTimeStamp.seconds
+        if starts[speaker] == nil { starts[speaker] = pts }
+        write(buffer, speaker)
+        if let onSamples, let samples = resample(buffer, speaker) {
+            onSamples(speaker, samples, pts)
         }
     }
 
@@ -43,143 +52,46 @@ final class AudioSink: NSObject, SCStreamOutput, SCStreamDelegate {
         onStop?(error)
     }
 
-    /// Fecha o arquivo. Sincrono na fila de audio para nao truncar o ultimo buffer.
+    /// Fecha os arquivos. Sincrono na fila de audio para nao truncar o ultimo buffer.
     func close() {
-        queue.sync { systemFile = nil }
+        queue.sync { files = [:] }
     }
 
-    private func write(_ buffer: CMSampleBuffer) {
-        guard let description = buffer.formatDescription else { return }
+    /// Converte pra 16kHz mono sem acumular arredondamento. O AudioConverter trunca cada
+    /// buffer (1024 frames a 48kHz viram 341, nao 341,33), e sem essa correcao as trilhas
+    /// escorregariam ate 3,5s por hora uma contra a outra na mistura.
+    private func resample(_ buffer: CMSampleBuffer, _ speaker: Speaker) -> [Float]? {
+        guard let rate = buffer.formatDescription?.audioStreamBasicDescription?.mSampleRate else { return nil }
+        var samples = (try? converter.resampleSampleBuffer(buffer)) ?? []
+        var total = converted[speaker] ?? (0, 0)
+        total.seconds += Double(buffer.numSamples) / rate
+        let count = Int((total.seconds * 16_000).rounded()) - total.samples
+        if samples.count > count { samples.removeLast(samples.count - count) }
+        samples += repeatElement(samples.last ?? 0, count: count - samples.count)
+        total.samples += count
+        converted[speaker] = total
+        return samples
+    }
+
+    private func write(_ buffer: CMSampleBuffer, _ speaker: Speaker) {
+        guard let description = buffer.formatDescription, let url = urls[speaker] else { return }
         let format = AVAudioFormat(cmAudioFormatDescription: description)
         do {
             try buffer.withAudioBufferList { list, _ in
                 guard let pcm = AVAudioPCMBuffer(pcmFormat: format, bufferListNoCopy: list.unsafePointer) else { return }
-                if systemFile == nil {
-                    // O formato de processamento precisa casar com o buffer de entrada.
-                    systemFile = try AVAudioFile(forWriting: systemURL, settings: [
+                if files[speaker] == nil {
+                    // O formato de processamento precisa casar com o buffer de entrada
+                    // (mic chega int16 interleaved; o padrao float32 deinterleaved da erro -50).
+                    files[speaker] = try AVAudioFile(forWriting: url, settings: [
                         AVFormatIDKey: kAudioFormatMPEG4AAC,
                         AVSampleRateKey: format.sampleRate,
                         AVNumberOfChannelsKey: format.channelCount,
                     ], commonFormat: format.commonFormat, interleaved: format.isInterleaved)
                 }
-                try systemFile?.write(from: pcm)
+                try files[speaker]?.write(from: pcm)
             }
         } catch {
-            NSLog("Zeca: falha escrevendo %@: %@", systemURL.lastPathComponent, error.localizedDescription)
+            NSLog("Zeca: falha escrevendo %@: %@", url.lastPathComponent, error.localizedDescription)
         }
-    }
-}
-
-/// O AEC do macOS so cancela bem quando mic e saida sao o mesmo aparelho.
-/// Validado empiricamente (ago/2026): mesmo dispositivo cancela a zero;
-/// rota cruzada (mic USB + caixas no jack) vaza a fala 6x acima do ruido.
-enum AudioRoute {
-    static var mismatch: Bool {
-        func device(_ selector: AudioObjectPropertySelector) -> AudioDeviceID? {
-            var id = AudioDeviceID(0)
-            var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-            var addr = AudioObjectPropertyAddress(
-                mSelector: selector,
-                mScope: kAudioObjectPropertyScopeGlobal,
-                mElement: kAudioObjectPropertyElementMain)
-            guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject),
-                                             &addr, 0, nil, &size, &id) == noErr, id != 0 else { return nil }
-            return id
-        }
-        guard let input = device(kAudioHardwarePropertyDefaultInputDevice),
-              let output = device(kAudioHardwarePropertyDefaultOutputDevice) else { return false }
-        return input != output
-    }
-}
-
-/// Captura o microfone via AVAudioEngine com voice processing ligado.
-/// O AEC do sistema subtrai do mic o que esta saindo pelos alto-falantes,
-/// entao a fala dos outros participantes nao vaza para a trilha "You".
-final class MicCapture {
-    private let engine = AVAudioEngine()
-    private let url: URL
-    private var file: AVAudioFile?
-    private let converter = AudioConverter()
-    private var observer: NSObjectProtocol?
-
-    /// Host time (segundos) do primeiro buffer, mesmo relogio do PTS do SCStream.
-    private(set) var start: TimeInterval?
-    // Lidos na thread de audio do tap; race benigna (no maximo um buffer a mais).
-    private var isPaused = false
-
-    /// Chamado na thread do tap com cada chunk ja em 16kHz mono.
-    var onSamples: (([Float]) -> Void)?
-
-    init(url: URL) {
-        self.url = url
-    }
-
-    func run() throws {
-        let input = engine.inputNode
-        // Precisa vir antes de consultar o formato: voice processing muda o formato do no.
-        try input.setVoiceProcessingEnabled(true)
-        // Sem ducking: o AEC nao deve abaixar o volume da reuniao que esta tocando.
-        input.voiceProcessingOtherAudioDuckingConfiguration =
-            .init(enableAdvancedDucking: false, duckingLevel: .min)
-
-        // Com voice processing o no entrega varios canais: o 0 e a voz processada
-        // (AEC aplicado), os demais sao mics crus e referencias de eco. O canal 0
-        // e copiado a mao — AVAudioConverter fazia esse downmix, mas com a topologia
-        // de 9 canais (iPhone via Continuity presente) ele passou a devolver zero
-        // digital sem erro nenhum. Tudo (arquivo e transcricao) passa por esse mono.
-        let format = input.outputFormat(forBus: 0)
-        guard let mono = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: format.sampleRate,
-                                       channels: 1, interleaved: false) else {
-            throw NSError(domain: "Zeca", code: 2,
-                          userInfo: [NSLocalizedDescriptionKey: "Unsupported microphone format."])
-        }
-        file = try AVAudioFile(forWriting: url, settings: [
-            AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: mono.sampleRate,
-            AVNumberOfChannelsKey: 1,
-        ], commonFormat: .pcmFormatFloat32, interleaved: false)
-
-        input.installTap(onBus: 0, bufferSize: 4800, format: format) { [weak self] buffer, when in
-            guard let self, !self.isPaused else { return }
-            if self.start == nil { self.start = AVAudioTime.seconds(forHostTime: when.hostTime) }
-            guard let out = AVAudioPCMBuffer(pcmFormat: mono, frameCapacity: buffer.frameLength),
-                  let src = buffer.floatChannelData, let dst = out.floatChannelData else { return }
-            out.frameLength = buffer.frameLength
-            if buffer.format.isInterleaved {
-                let stride = Int(buffer.format.channelCount)
-                for i in 0..<Int(buffer.frameLength) { dst[0][i] = src[0][i * stride] }
-            } else {
-                memcpy(dst[0], src[0], Int(buffer.frameLength) * MemoryLayout<Float>.size)
-            }
-            do {
-                try self.file?.write(from: out)
-            } catch {
-                NSLog("Zeca: falha escrevendo mic.m4a: %@", error.localizedDescription)
-            }
-            if let onSamples = self.onSamples, let samples = try? self.converter.resampleBuffer(out) {
-                onSamples(samples)
-            }
-        }
-        try engine.start()
-
-        // ponytail: se o dispositivo de entrada trocar no meio (ex: AirPods), so religa a engine;
-        // se o formato mudar, os writes falham logados. Upgrade: reconverter pro formato do arquivo.
-        observer = NotificationCenter.default.addObserver(
-            forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil) { [weak self] _ in
-            guard let self, self.file != nil else { return }
-            try? self.engine.start()
-        }
-    }
-
-    func setPaused(_ paused: Bool) {
-        isPaused = paused
-    }
-
-    func close() {
-        if let observer { NotificationCenter.default.removeObserver(observer) }
-        observer = nil
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
-        file = nil
     }
 }

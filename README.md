@@ -28,9 +28,9 @@ And the rest:
 - Day dashboard with macOS and Google Calendar events, one click to join a call with recording already running, weekly stats.
 - Paste a Zoom `.vtt` or plain "Name: sentence" lines and get the same summaries, no audio needed.
 - Translation of transcript, summary and notes on demand, cached per language.
-- Speakers stay simple: "You" and "Others", double-click to rename. No diarization guesswork.
+- One transcript for the whole call. Mic and system audio are mixed before transcription, so it doesn't say who spoke.
 - The bundled model catalog comes from a real benchmark, not vibes: [BENCHMARK.md](BENCHMARK.md).
-- Automatic titles, a pause that really cuts the audio, a menu bar timer, and a warning when mic and speakers are different devices (echo cancellation likes them equal).
+- Automatic titles, a pause that really cuts the audio and a menu bar timer.
 
 ## Storage
 

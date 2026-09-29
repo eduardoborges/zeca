@@ -44,8 +44,8 @@ is picked up automatically — no pbxproj editing for new sources.
 | File | Owns |
 |---|---|
 | `Recorder.swift` | `Recording` model, ScreenCaptureKit capture, pause, delete, auto-title hook |
-| `AudioSink.swift` | SCStream output → AAC files + 16kHz mono chunks for live transcription |
-| `LiveSession.swift` | Live pipeline: silence-based sentence segmentation (Hex-style whole-utterance decode), levels. Runs headless — the recording screen shows only timer/levels |
+| `AudioSink.swift` | SCStream system and mic outputs → two AAC files + 16kHz mono chunks for live transcription |
+| `LiveSession.swift` | Live pipeline: sums mic + system (aligned by first PTS), then silence-based sentence segmentation (Hex-style whole-utterance decode), levels. Runs headless: the recording screen shows only timer/levels |
 | `Transcriber.swift` | `Turn`/`Speaker` types, offline Parakeet transcription, shared model loader (reentrant) |
 | `LocalLLM.swift` | Embedded on-device LLM (MLX): model catalog, download/delete, generation |
 | `AudioPlayer.swift` | `PlayerModel` (play/seek) + `MeetingAudio` combined-mix builder (meeting.m4a) |
@@ -64,10 +64,11 @@ destroys Parakeet quality — do not reintroduce it.
 
 There are no unit tests; features are verified by driving the real app:
 
-- Speak into a recording with `say -v Luciana "..."` (system audio is captured
-  as "Others"; the mic no longer hears it thanks to echo cancellation).
-  Speakers are only "You"/"Others" — diarization was removed on purpose
-  (it confused the summarizer); don't reintroduce it.
+- Speak into a recording with `say -v Luciana "..."`. It lands in `system.m4a`,
+  and on loudspeakers the mic hears it too. That's fine, because transcription
+  runs on the mic + system mix and turns carry no speaker. Echo cancellation is
+  off on purpose (voice processing ducked the meeting audio and lowered the mic);
+  don't bring back per-track transcription, or diarization (it confused the summarizer).
 - Drive the UI via `osascript` System Events (window 1 → `splitter group 1` →
   sidebar outline / detail scroll area). AX titles are mostly `missing value`;
   find buttons by `description`.
