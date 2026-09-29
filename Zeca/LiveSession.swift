@@ -127,6 +127,8 @@ final class LiveSession: ObservableObject {
     /// Drena o que sobrou, grava transcript.json e para o loop.
     func stop() async {
         loop?.cancel()
+        // Espera a frase que esta sendo transcrita; com ela em andamento o flush final nao roda.
+        if manager != nil { await loop?.value }
         loop = nil
         levelLoop?.cancel()
         levelLoop = nil
