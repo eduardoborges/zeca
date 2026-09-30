@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0](https://github.com/eduardoborges/zeca/compare/v1.4.0...v1.5.0) (2026-09-29)
+
+
+### Features
+
+* **audio:** transcribe mic and system mixed, without echo cancellation ([f252041](https://github.com/eduardoborges/zeca/commit/f25204129a8ce5faa815df9d304bd23c505e123d))
+
+
+### Bug Fixes
+
+* **live:** wait for the utterance in flight before the final flush ([c92c46f](https://github.com/eduardoborges/zeca/commit/c92c46f9e5a02f5dbe25c9e2e59e868ecc97aa17))
+
 ## [1.4.0](https://github.com/eduardoborges/zeca/compare/v1.3.0...v1.4.0) (2026-08-13)
 
 
