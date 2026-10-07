@@ -203,6 +203,7 @@ struct ContentView: View {
                 BatchView(recordings: selectedRecordings) { pendingDelete = selectedRecordings }
             } else if let recording = selectedRecordings.first {
                 RecordingDetail(recording: recording) { pendingDelete = [recording] }
+                    .id(recording.id)
             } else {
                 DashboardView { title, link in
                     if let link { NSWorkspace.shared.open(link) }
@@ -667,6 +668,14 @@ private struct RecordingDetail: View {
                 await suggestQuestions(from: summary)
             }
         }
+        // Trocar de reuniao nao para a analise. Quando o modelo termina,
+        // esta view le do disco o que ela salvou.
+        .onChange(of: summarizer.isRunning) { _, running in
+            guard !running else { return }
+            summary = summary ?? recording.summary
+            notes = notes ?? recording.notes
+            if suggestions.isEmpty { suggestions = recording.suggestedQuestions }
+        }
         .alert("Rename speaker", isPresented: Binding(
             get: { renamingSpeaker != nil },
             set: { if !$0 { renamingSpeaker = nil } }
@@ -990,7 +999,7 @@ private struct RecordingDetail: View {
                         Spacer()
                         Button("Summarize", systemImage: "sparkles") { summarize() }
                             .buttonStyle(.borderedProminent)
-                            .disabled(turns.isEmpty)
+                            .disabled(turns.isEmpty || isBusy)
                     }
                 }
                 if let error = summarizer.error {
@@ -1018,9 +1027,9 @@ private struct RecordingDetail: View {
         if generatingTitle { return "Generating title with \(summarizer.providerName)..." }
         if asking { return "Answering with \(summarizer.providerName)..." }
         if suggesting { return "Suggesting questions with \(summarizer.providerName)..." }
-        return generatingNotes
-            ? "Writing notes with \(summarizer.providerName)..."
-            : "Summarizing with \(summarizer.providerName)..."
+        if generatingNotes { return "Writing notes with \(summarizer.providerName)..." }
+        if generatingSummary { return "Summarizing with \(summarizer.providerName)..." }
+        return "Working with \(summarizer.providerName)..."
     }
 
     /// Refaz a transcricao (modelo das Configuracoes) e por cima o resumo e o ponto a ponto.
@@ -1035,21 +1044,28 @@ private struct RecordingDetail: View {
             try? FileManager.default.removeItem(at: recording.transcriptURL)
             await autoProcess(notify: false)
             guard !turns.isEmpty, !Task.isCancelled else { generationTask = nil; return }
-            generatingSummary = true
-            let newSummary = await summarizer.run(recording, turns: turns)
-            if !Task.isCancelled { summary = newSummary }
-            generatingSummary = false
-            guard !Task.isCancelled else { generationTask = nil; return }
-            generatingNotes = true
-            let newNotes = await summarizer.runNotes(recording, turns: turns)
-            if !Task.isCancelled {
-                notes = newNotes
-                Notifier.finished("Analysis ready: \(recording.title)")
-            }
-            generatingNotes = false
-            if let newSummary, !Task.isCancelled { await suggestQuestions(from: newSummary) }
+            await analyze(turns)
             generationTask = nil
         }
+    }
+
+    /// Resumo, depois ponto a ponto, depois as perguntas sugeridas.
+    /// Os turnos chegam por parametro porque a task continua depois da troca
+    /// de reuniao, quando o estado da view ja e o da outra.
+    private func analyze(_ turns: [Turn]) async {
+        generatingSummary = true
+        let newSummary = await summarizer.run(recording, turns: turns)
+        if !Task.isCancelled { summary = newSummary }
+        generatingSummary = false
+        guard !Task.isCancelled else { return }
+        generatingNotes = true
+        let newNotes = await summarizer.runNotes(recording, turns: turns)
+        if !Task.isCancelled {
+            notes = newNotes
+            Notifier.finished("Analysis ready: \(recording.title)")
+        }
+        generatingNotes = false
+        if let newSummary, !Task.isCancelled { await suggestQuestions(from: newSummary) }
     }
 
     private func generateNotes() {
@@ -1088,7 +1104,7 @@ private struct RecordingDetail: View {
                         Spacer()
                         Button("Generate", systemImage: "list.bullet") { generateNotes() }
                             .buttonStyle(.borderedProminent)
-                            .disabled(turns.isEmpty || generatingNotes)
+                            .disabled(turns.isEmpty || isBusy)
                     }
                 }
             }
