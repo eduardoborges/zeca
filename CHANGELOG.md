@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.0](https://github.com/eduardoborges/zeca/compare/v1.6.0...v1.7.0) (2026-10-07)
+
+
+### Features
+
+* **settings:** list Claude API models with the API key ([a22bb21](https://github.com/eduardoborges/zeca/commit/a22bb21f53e03f926554147cfeaaf23daa4842a2))
+* **settings:** list Claude Code models from the CLI ([6ded851](https://github.com/eduardoborges/zeca/commit/6ded851cd358afadd746b417291e9f745e07c677))
+
 ## [1.6.0](https://github.com/eduardoborges/zeca/compare/v1.5.0...v1.6.0) (2026-10-07)
 
 
