@@ -211,11 +211,50 @@ final class Summarizer: ObservableObject {
             maxTokens: 8192)
     }
 
-    private func complete(turns: [Turn], system: String, maxTokens: Int) async -> String? {
-        // label, nao speaker.label: reuniao importada e renames manuais trazem o nome real.
-        // Gravacao mixada nao tem rotulo.
-        let transcript = turns.map { $0.label.isEmpty ? $0.text : "[\($0.label)] \($0.text)" }
+    /// Responde uma pergunta livre sobre a reuniao, so com base na transcricao.
+    func ask(_ question: String, turns: [Turn]) async -> String? {
+        let user = "Meeting transcript:\n\n\(Self.transcriptText(turns))\n\nQuestion: \(question)"
+            + "\n\nAnswer in the language of the question."
+        isRunning = true
+        defer { isRunning = false }
+        return await route(
+            system: """
+            You answer questions about a meeting using only its transcript. Be direct and concise; use short bullets (-) only when listing several items. If the transcript does not contain the answer, say so plainly instead of guessing. The transcript may not say who is speaking, so do not attribute lines to people unless the transcript makes it clear. Never use # or Markdown headers.
+            """,
+            user: user,
+            maxTokens: 1024)
+    }
+
+    /// Sugere perguntas a partir do resumo, que e bem mais curto que a transcricao.
+    /// Salva em questions.txt, uma por linha.
+    func suggestQuestions(_ recording: Recording, summary: String) async -> [String]? {
+        isRunning = true
+        defer { isRunning = false }
+        guard let raw = await route(
+            system: "Suggest 4 short questions someone would likely ask about this meeting, based on its summary. \(languageInstruction) Reply with ONLY the questions, one per line, no numbering, no bullets.",
+            user: summary,
+            maxTokens: 256)
+        else { return nil }
+        let questions = raw.split(separator: "\n")
+            .map { $0.replacingOccurrences(of: #"^\s*(?:[-*•]|\d+[.)])?\s*"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespaces) }
+            .filter { $0.hasSuffix("?") }
+            .prefix(4)
+        guard !questions.isEmpty else { return nil }
+        try? questions.joined(separator: "\n")
+            .write(to: recording.questionsURL, atomically: true, encoding: .utf8)
+        return Array(questions)
+    }
+
+    // label, nao speaker.label: reuniao importada e renames manuais trazem o nome real.
+    // Gravacao mixada nao tem rotulo.
+    private static func transcriptText(_ turns: [Turn]) -> String {
+        turns.map { $0.label.isEmpty ? $0.text : "[\($0.label)] \($0.text)" }
             .joined(separator: "\n")
+    }
+
+    private func complete(turns: [Turn], system: String, maxTokens: Int) async -> String? {
+        let transcript = Self.transcriptText(turns)
         // A instrucao de idioma volta no fim: entre ela no system e a resposta ha uma
         // transcricao inteira, e modelo pequeno segue o idioma do que leu por ultimo.
         // Medido: o Qwen 3.5 9B respondia em ingles numa reuniao de 36min e passou a

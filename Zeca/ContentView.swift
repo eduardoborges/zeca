@@ -630,12 +630,18 @@ private struct RecordingDetail: View {
     @State private var titleDraft = ""
     @State private var renamingSpeaker: String?
     @State private var speakerName = ""
+    @State private var question = ""
+    @State private var answers: [(question: String, answer: String)] = []
+    @State private var suggestions: [String] = []
+    @State private var asking = false
+    @State private var suggesting = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 if hasAudio { playerCard }
+                askCard
                 summaryCard
                 notesCard
                 transcriptCard
@@ -648,11 +654,18 @@ private struct RecordingDetail: View {
             turns = recording.transcript ?? []
             summary = recording.summary
             notes = recording.notes
+            question = ""
+            answers = []
+            suggestions = recording.suggestedQuestions
             translatedTurns = nil
             translationCode = nil
             summarizer.error = nil
             editingTitle = false
             await autoProcess()
+            // Reuniao antiga ja resumida: sugere uma vez e o questions.txt vira cache.
+            if suggestions.isEmpty, let summary, summarizer.isConfigured, !isBusy {
+                await suggestQuestions(from: summary)
+            }
         }
         .alert("Rename speaker", isPresented: Binding(
             get: { renamingSpeaker != nil },
@@ -694,6 +707,7 @@ private struct RecordingDetail: View {
                 if result != nil { Notifier.finished("Summary ready: \(recording.title)") }
             }
             generatingSummary = false
+            if let result, !Task.isCancelled { await suggestQuestions(from: result) }
             generationTask = nil
         }
     }
@@ -704,6 +718,32 @@ private struct RecordingDetail: View {
         generatingSummary = false
         generatingNotes = false
         generatingTitle = false
+        asking = false
+        suggesting = false
+    }
+
+    private func suggestQuestions(from summary: String) async {
+        suggesting = true
+        if let result = await summarizer.suggestQuestions(recording, summary: summary), !Task.isCancelled {
+            suggestions = result
+        }
+        suggesting = false
+    }
+
+    private func ask(_ text: String) {
+        let q = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty, !isBusy else { return }
+        question = ""
+        summarizer.error = nil
+        generationTask = Task {
+            asking = true
+            let answer = await summarizer.ask(q, turns: turns)
+            if !Task.isCancelled {
+                if let answer { answers.append((q, answer)) } else { question = q }
+            }
+            asking = false
+            generationTask = nil
+        }
     }
 
     // MARK: - Header
@@ -963,6 +1003,7 @@ private struct RecordingDetail: View {
     private func redoTranscription() {
         Task {
             turns = []
+            answers = []
             try? FileManager.default.removeItem(at: recording.transcriptURL)
             await autoProcess()
         }
@@ -975,6 +1016,8 @@ private struct RecordingDetail: View {
     private var busyLabel: String {
         if let live = transcriber.status ?? summarizer.status { return live }
         if generatingTitle { return "Generating title with \(summarizer.providerName)..." }
+        if asking { return "Answering with \(summarizer.providerName)..." }
+        if suggesting { return "Suggesting questions with \(summarizer.providerName)..." }
         return generatingNotes
             ? "Writing notes with \(summarizer.providerName)..."
             : "Summarizing with \(summarizer.providerName)..."
@@ -987,6 +1030,8 @@ private struct RecordingDetail: View {
             turns = []
             summary = nil
             notes = nil
+            answers = []
+            suggestions = []
             try? FileManager.default.removeItem(at: recording.transcriptURL)
             await autoProcess(notify: false)
             guard !turns.isEmpty, !Task.isCancelled else { generationTask = nil; return }
@@ -1002,6 +1047,7 @@ private struct RecordingDetail: View {
                 Notifier.finished("Analysis ready: \(recording.title)")
             }
             generatingNotes = false
+            if let newSummary, !Task.isCancelled { await suggestQuestions(from: newSummary) }
             generationTask = nil
         }
     }
@@ -1044,6 +1090,52 @@ private struct RecordingDetail: View {
                             .buttonStyle(.borderedProminent)
                             .disabled(turns.isEmpty || generatingNotes)
                     }
+                }
+            }
+        }
+    }
+
+    /// Perguntas livres sobre a reuniao. Historico so em memoria: some ao trocar de reuniao.
+    private var askCard: some View {
+        Card(title: "Ask about this meeting", systemImage: "questionmark.bubble", tint: .primary) {
+            if turns.isEmpty {
+                Text("Available after transcription.").foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(answers.enumerated()), id: \.offset) { _, item in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.question).font(.callout.weight(.semibold))
+                        Text(LocalizedStringKey(item.answer))
+                            .textSelection(.enabled)
+                            .lineSpacing(3)
+                    }
+                }
+                if asking {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Answering with \(summarizer.providerName)...").foregroundStyle(.secondary)
+                    }
+                    StreamingText(text: summarizer.streaming)
+                }
+                let pending = suggestions.filter { s in !answers.contains { $0.question == s } }
+                if !pending.isEmpty, !asking {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(pending, id: \.self) { suggestion in
+                            Button(suggestion) { ask(suggestion) }
+                                .buttonStyle(.bordered)
+                                .disabled(isBusy)
+                        }
+                    }
+                }
+                HStack {
+                    TextField("Ask anything about this meeting", text: $question)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { ask(question) }
+                    Button("Ask", systemImage: "arrow.up") { ask(question) }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(question.trimmingCharacters(in: .whitespaces).isEmpty || isBusy)
+                }
+                if let error = summarizer.error, summary != nil {
+                    Text(error).font(.caption).foregroundStyle(.red)
                 }
             }
         }

@@ -22,6 +22,11 @@ struct Recording: Identifiable, Hashable {
     var notes: String? { try? String(contentsOf: notesURL, encoding: .utf8) }
 
     var summary: String? { try? String(contentsOf: summaryURL, encoding: .utf8) }
+    var questionsURL: URL { url.appendingPathComponent("questions.txt") }
+    var suggestedQuestions: [String] {
+        ((try? String(contentsOf: questionsURL, encoding: .utf8)) ?? "")
+            .split(separator: "\n").map(String.init)
+    }
 
     /// Titulo dado pelo usuario na criacao; a pasta continua sendo a identidade.
     var customTitle: String? {
