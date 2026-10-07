@@ -17,8 +17,9 @@ conversation happens in Portuguese.
 xcodebuild -project Zeca.xcodeproj -scheme Zeca -configuration Debug \
   -skipPackagePluginValidation -skipMacroValidation build
 
-# run the built app
-open ~/Library/Developer/Xcode/DerivedData/Zeca-*/Build/Products/Debug/Zeca.app
+# run the built app. Debug builds as "Zeca Debug" (com.zeca.Zeca.debug) with its own
+# UserDefaults and permissions, so it runs alongside the installed release
+open ~/Library/Developer/Xcode/DerivedData/Zeca-*/Build/Products/Debug/Zeca\ Debug.app
 
 # site (no build step, pure HTML/CSS + one inline script)
 npx wrangler pages deploy site --project-name zeca
@@ -32,6 +33,7 @@ is picked up automatically — no pbxproj editing for new sources.
 - **NEVER kill/rebuild the app without checking for an active recording first.**
   A `pkill` during recording corrupts the m4a files (no moov atom). Check:
   the menu bar item title is `MenuBarIcon` when idle; anything else = recording.
+  Check the right process: `Zeca` is the release and `Zeca Debug` is the Debug build.
   (This mistake was made once; recovery required building untrunc from source.)
 - Deployment target is macOS 15. Anything newer (Liquid Glass `glassEffect`,
   FoundationModels) must go through `#available(macOS 26.0, *)` — the helpers in
