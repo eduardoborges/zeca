@@ -663,8 +663,16 @@ private struct RecordingDetail: View {
             summarizer.error = nil
             editingTitle = false
             await autoProcess()
-            // Reuniao antiga ja resumida: sugere uma vez e o questions.txt vira cache.
-            if suggestions.isEmpty, let summary, summarizer.isConfigured, !isBusy {
+            guard !Task.isCancelled, !turns.isEmpty, summarizer.isConfigured, !isBusy else { return }
+            if summary == nil, notes == nil {
+                summarizer.error = nil
+                let turns = turns
+                generationTask = Task {
+                    await analyze(turns)
+                    generationTask = nil
+                }
+            } else if suggestions.isEmpty, let summary {
+                // Reuniao antiga ja resumida: sugere uma vez e o questions.txt vira cache.
                 await suggestQuestions(from: summary)
             }
         }
