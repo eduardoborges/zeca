@@ -149,17 +149,26 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(Summarizer.localAvailable ? Color.secondary : .orange)
         } else {
-            Picker("Model", selection: Binding(
-                get: { summarizer.claudeModel }, set: { summarizer.claudeModel = $0 })) {
-                ForEach(Summarizer.claudeModels, id: \.id) { item in
-                    Text(item.label).tag(item.id)
+            HStack {
+                Picker("Model", selection: Binding(
+                    get: { summarizer.claudeModel }, set: { summarizer.claudeModel = $0 })) {
+                    if !summarizer.claudeModels.contains(where: { $0.id == summarizer.claudeModel }) {
+                        Text(summarizer.claudeModel).tag(summarizer.claudeModel)
+                    }
+                    ForEach(summarizer.claudeModels, id: \.id) { item in
+                        Text(item.label).tag(item.id)
+                    }
+                }
+                if summarizer.fetchingModels {
+                    ProgressView().controlSize(.small)
                 }
             }
+            .task(id: summarizer.apiKey) { await summarizer.fetchClaudeModels() }
             SecureField("Anthropic API key", text: Binding(
                 get: { summarizer.apiKey }, set: { summarizer.apiKey = $0 }))
-            Text("Used only for summaries. Stored on your Mac.")
+            Text(summarizer.claudeModelsError ?? "Used only for summaries. Stored on your Mac.")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(summarizer.claudeModelsError == nil ? Color.secondary : .orange)
         }
     }
 

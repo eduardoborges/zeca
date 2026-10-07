@@ -9,7 +9,7 @@ final class Summarizer: ObservableObject {
     @AppStorage("anthropicKey") var apiKey = ""
     @AppStorage("summaryProvider") var provider = "claude" // "claude" | "openai" | "local" | "mlx"
     @AppStorage("summaryLanguage") var summaryLanguage = "auto" // "auto" | codigo ISO
-    @AppStorage("claudeModel") var claudeModel = "claude-opus-5"
+    @AppStorage("claudeModel") var claudeModel = "claude-opus-5-5"
     // Qualquer servidor compativel com a API da OpenAI (OpenAI, OpenRouter, Groq, Ollama...).
     static let openaiDefaultURL = "https://api.openai.com/v1"
     static let openaiDefaultModel = "gpt-4o-mini"
@@ -18,11 +18,13 @@ final class Summarizer: ObservableObject {
     @AppStorage("openaiKey") var openaiKey = ""
     @AppStorage("openaiModel") var openaiModel = openaiDefaultModel
 
-    static let claudeModels: [(id: String, label: String)] = [
-        ("claude-opus-5", "Opus 5 (most capable)"),
-        ("claude-sonnet-5", "Sonnet 5 (balanced)"),
+    // Settings troca esta lista pela do GET /v1/models quando ha chave.
+    @Published var claudeModels: [(id: String, label: String)] = [
+        ("claude-opus-5-5", "Opus 5.5 (most capable)"),
+        ("claude-sonnet-5-5", "Sonnet 5.5 (balanced)"),
         ("claude-haiku-4-5", "Haiku 4.5 (fastest)"),
     ]
+    @Published var claudeModelsError: String?
 
     // Aliases do claude CLI, que sempre apontam pro modelo mais novo de cada linha.
     // Settings troca esta lista pela que o CLI oferece no /model.
@@ -89,7 +91,7 @@ final class Summarizer: ObservableObject {
         if usesLocal { return "Apple Intelligence (on-device)" }
         if usesOpenAI { return openaiModel.isEmpty ? "OpenAI-compatible API" : openaiModel }
         if usesClaudeCode { return "Claude Code (\(claudeCodeModel.capitalized))" }
-        let short = Self.claudeModels.first { $0.id == claudeModel }
+        let short = claudeModels.first { $0.id == claudeModel }
             .map { $0.label.components(separatedBy: " (")[0] }
         return short.map { "Claude \($0)" } ?? "Claude"
     }
@@ -316,6 +318,35 @@ final class Summarizer: ObservableObject {
     }
 
     /// Lista os modelos do servidor configurado (GET /models).
+    /// Lista os modelos que a chave enxerga. Nao pagina porque limit=1000 cobre o catalogo inteiro.
+    func fetchClaudeModels() async {
+        guard !apiKey.isEmpty else { claudeModelsError = nil; return }
+        fetchingModels = true
+        defer { fetchingModels = false }
+        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/models?limit=1000")!)
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            guard (response as? HTTPURLResponse)?.statusCode == 200,
+                  let list = json?["data"] as? [[String: Any]] else {
+                let message = (json?["error"] as? [String: Any])?["message"] as? String
+                claudeModelsError = message ?? "Could not list models."
+                return
+            }
+            // O display_name vem como "Claude Opus 5.5", e o providerName ja acrescenta o "Claude".
+            let models = list.compactMap { model -> (id: String, label: String)? in
+                guard let id = model["id"] as? String, let name = model["display_name"] as? String else { return nil }
+                return (id, name.hasPrefix("Claude ") ? String(name.dropFirst(7)) : name)
+            }
+            if !models.isEmpty { claudeModels = models }
+            claudeModelsError = nil
+        } catch {
+            if !(error is CancellationError) { claudeModelsError = error.localizedDescription }
+        }
+    }
+
     private var claudeCodeModelsFetched = false
 
     /// Busca a lista do /model do claude CLI. O handshake initialize do modo
