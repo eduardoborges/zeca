@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.0](https://github.com/eduardoborges/zeca/compare/v1.5.0...v1.6.0) (2026-10-07)
+
+
+### Features
+
+* **detail:** analyze a meeting on open when it has no summary or notes ([9a19c4f](https://github.com/eduardoborges/zeca/commit/9a19c4faae361dbc6d46ebacd9135c6eb088afd5))
+* **detail:** ask questions about a meeting ([3bd5585](https://github.com/eduardoborges/zeca/commit/3bd558571f2aeebddb5393f68faa340365f6b435))
+
+
+### Bug Fixes
+
+* **detail:** keep each meeting's state apart ([7646308](https://github.com/eduardoborges/zeca/commit/76463085db051aa517fd06f589c15f6c7e0dd4a7))
+
 ## [1.5.0](https://github.com/eduardoborges/zeca/compare/v1.4.0...v1.5.0) (2026-09-29)
 
 
