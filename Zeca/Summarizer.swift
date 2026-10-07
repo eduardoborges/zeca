@@ -24,10 +24,10 @@ final class Summarizer: ObservableObject {
         ("claude-haiku-4-5", "Haiku 4.5 (fastest)"),
     ]
 
-    // Aliases do claude CLI: sempre apontam pro modelo mais novo de cada linha,
-    // entao a lista nao precisa acompanhar releases.
+    // Aliases do claude CLI, que sempre apontam pro modelo mais novo de cada linha.
+    // Settings troca esta lista pela que o CLI oferece no /model.
     @AppStorage("claudeCodeModel") var claudeCodeModel = "sonnet"
-    static let claudeCodeModels: [(id: String, label: String)] = [
+    @Published var claudeCodeModels: [(id: String, label: String)] = [
         ("fable", "Fable (most capable)"),
         ("opus", "Opus"),
         ("sonnet", "Sonnet (recommended)"),
@@ -316,6 +316,49 @@ final class Summarizer: ObservableObject {
     }
 
     /// Lista os modelos do servidor configurado (GET /models).
+    private var claudeCodeModelsFetched = false
+
+    /// Busca a lista do /model do claude CLI. O handshake initialize do modo
+    /// stream-json responde sem mandar prompt, entao nao gasta tokens.
+    /// Se falhar, continua a lista de aliases.
+    func fetchClaudeCodeModels() async {
+        guard let path = Self.claudeCLIPath, !claudeCodeModelsFetched, !fetchingModels else { return }
+        fetchingModels = true
+        defer { fetchingModels = false }
+        let output: Data = await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: path)
+                process.arguments = ["-p", "--input-format", "stream-json",
+                                     "--output-format", "stream-json", "--verbose"]
+                process.currentDirectoryURL = FileManager.default.temporaryDirectory
+                let stdin = Pipe(), stdout = Pipe()
+                process.standardInput = stdin
+                process.standardOutput = stdout
+                process.standardError = FileHandle.nullDevice
+                guard (try? process.run()) != nil else { return continuation.resume(returning: Data()) }
+                let request = #"{"type":"control_request","request_id":"models","request":{"subtype":"initialize"}}"#
+                stdin.fileHandleForWriting.write(Data((request + "\n").utf8))
+                stdin.fileHandleForWriting.closeFile()
+                let data = stdout.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                continuation.resume(returning: data)
+            }
+        }
+        // A saida tem um evento JSON por linha, e a resposta do initialize traz os modelos.
+        let response = output.split(separator: UInt8(ascii: "\n"))
+            .compactMap { try? JSONSerialization.jsonObject(with: Data($0)) as? [String: Any] }
+            .first { $0["type"] as? String == "control_response" }
+        let body = (response?["response"] as? [String: Any])?["response"] as? [String: Any]
+        let models = (body?["models"] as? [[String: Any]] ?? []).compactMap { model -> (id: String, label: String)? in
+            guard let id = model["value"] as? String, let name = model["displayName"] as? String else { return nil }
+            return (id, name)
+        }
+        guard !models.isEmpty else { return }
+        claudeCodeModels = models
+        claudeCodeModelsFetched = true
+    }
+
     func fetchOpenAIModels() async {
         let base = openaiBaseURL.hasSuffix("/") ? String(openaiBaseURL.dropLast()) : openaiBaseURL
         guard let url = URL(string: "\(base)/models") else {

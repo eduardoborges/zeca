@@ -119,12 +119,22 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         } else if summarizer.usesClaudeCode {
-            Picker("Model", selection: Binding(
-                get: { summarizer.claudeCodeModel }, set: { summarizer.claudeCodeModel = $0 })) {
-                ForEach(Summarizer.claudeCodeModels, id: \.id) { item in
-                    Text(item.label).tag(item.id)
+            HStack {
+                Picker("Model", selection: Binding(
+                    get: { summarizer.claudeCodeModel }, set: { summarizer.claudeCodeModel = $0 })) {
+                    // Modelo salvo que o CLI deixou de oferecer continua selecionavel.
+                    if !summarizer.claudeCodeModels.contains(where: { $0.id == summarizer.claudeCodeModel }) {
+                        Text(summarizer.claudeCodeModel).tag(summarizer.claudeCodeModel)
+                    }
+                    ForEach(summarizer.claudeCodeModels, id: \.id) { item in
+                        Text(item.label).tag(item.id)
+                    }
+                }
+                if summarizer.fetchingModels {
+                    ProgressView().controlSize(.small)
                 }
             }
+            .task { await summarizer.fetchClaudeCodeModels() }
             Text(Summarizer.claudeCLIPath.map {
                 "Uses your Claude Code login, so summaries count against that plan instead of API billing. CLI found at \($0)."
             } ?? "Claude Code CLI not found. Install it and run claude once in a terminal to log in.")
